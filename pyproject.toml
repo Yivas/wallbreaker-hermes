@@ -5,12 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wallbreaker"
 version = "0.1.0"
-description = "Wallbreaker — a terminal agent + dashboard for red-teaming LLMs"
+description = "Wallbreaker fork for LLM red-teaming and planned Hermes Agent integration"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "JailbrokenAI" }]
-keywords = ["llm", "red-team", "jailbreak", "security", "ai-safety"]
+maintainers = [{ name = "Yivas" }]
+keywords = ["llm", "red-team", "jailbreak", "security", "ai-safety", "hermes-agent"]
 classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
@@ -31,8 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/JailbrokenAI/wallbreaker"
-Repository = "https://github.com/JailbrokenAI/wallbreaker"
+Homepage = "https://github.com/Yivas/wallbreaker-hermes"
+Repository = "https://github.com/Yivas/wallbreaker-hermes"
+Upstream = "https://github.com/JailbrokenAI/wallbreaker"
 
 [project.optional-dependencies]
 dev = [

@@ -1,6 +1,7 @@
 # Security & Responsible Use
 
-Wallbreaker is an **offensive security research tool** for red-teaming and safety
+Wallbreaker Hermes is an AGPL-licensed fork of Wallbreaker. It is an **offensive security
+research tool** for red-teaming and safety
 evaluation of large language models. It exists so defenders, alignment researchers,
 and model providers can find and fix weaknesses before adversaries exploit them.
 
@@ -25,7 +26,15 @@ They are written to `wb_runs/`, `wb_images/`, `wb_artifacts/`, and `findings/`, 
 which are **gitignored** — keep them out of version control and handle them as
 sensitive data.
 
-## Reporting a vulnerability in Wallbreaker itself
+## Hermes runtime mode
+
+The planned Hermes mode will run only against an ephemeral, explicitly authorized target home.
+It must exclude credentials, sessions, channels, logs, caches, and real gateway state; constrain
+filesystem, tools, and network; compare state before and after each repetition; and destroy the
+sandbox on every exit path. Until those controls ship and are verified, do not treat a copied
+Hermes directory as a security sandbox.
+
+## Reporting a vulnerability in Wallbreaker Hermes itself
 
 If you find a security issue in the harness (e.g. a sandbox-escape in `run_shell`, a
 secret-leak path, an unsafe default), please open a private report rather than a public

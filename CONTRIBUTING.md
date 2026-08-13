@@ -1,4 +1,4 @@
-# Contributing to Wallbreaker Criterion
+# Contributing to Wallbreaker Hermes
 
 Thanks for helping make LLM red-teaming better. By contributing you agree your work is
 licensed under the project's [AGPL-3.0-or-later](LICENSE) license, and that you'll use the tool

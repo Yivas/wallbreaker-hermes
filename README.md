@@ -1,4 +1,4 @@
-# Wallbreaker Criterion: AI Red-Team Evaluation Harness
+# Wallbreaker Hermes: AI Red-Team Harness
 
 ```
 ██╗    ██╗ █████╗ ██╗     ██╗     ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗
@@ -10,8 +10,10 @@
         break the wall · not the rules of engagement    ⚔  authorized testing only
 ```
 
-Wallbreaker Criterion is an AGPL-licensed fork of Wallbreaker focused on reproducible LLM
-red-team evaluation. It provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
+Wallbreaker Hermes is an AGPL-licensed fork of
+[Wallbreaker](https://github.com/JailbrokenAI/wallbreaker). It preserves the standard
+Wallbreaker harness and is preparing an opt-in mode for autonomous, sandboxed red-teaming of
+Hermes Agent runtimes. It provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
 that reasons and calls tools in a loop. The backend is fully configurable, so
 it runs on **OpenRouter**, the **Z.AI GLM coding plan**, the local **Claude Code CLI**, a
 local server, or any OpenAI-/Anthropic-compatible API (including third-party proxies via
@@ -22,6 +24,16 @@ target mimicry from a leaked system-prompt corpus, a **multimodal image-edit att
 an LLM judge, and reliability validation.
 
 > For authorized security testing only.
+
+## Project status
+
+The standard Wallbreaker CLI, TUI, dashboard, MCP server, attack tools, judge, and reliability
+validation work as documented below. The Hermes runtime mode is planned and not yet released.
+It will target an ephemeral Hermes home, exercise the permitted identity, instructions,
+profiles, prefill, memory, and tools, compare state before and after each run, and destroy the
+sandbox on completion.
+
+The Python package and commands remain `wallbreaker` and `wb` for upstream compatibility.
 
 ## Highlights
 
@@ -68,9 +80,9 @@ an LLM judge, and reliability validation.
 
 ## Clone Repository 
 ```
-git clone https://github.com/Yivas/wallbreaker-criterion
+git clone https://github.com/Yivas/wallbreaker-hermes
 
-cd wallbreaker-criterion
+cd wallbreaker-hermes
 ```
 
 ## Install

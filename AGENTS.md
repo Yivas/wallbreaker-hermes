@@ -1,7 +1,7 @@
-# Wallbreaker Criterion project notes
+# Wallbreaker Hermes project notes
 
-Wallbreaker Criterion is an AGPL-licensed fork of Wallbreaker for reproducible LLM
-red-team evaluation.
+Wallbreaker Hermes is an AGPL-licensed fork of Wallbreaker. It preserves the standard
+Wallbreaker harness and will add opt-in, sandboxed Hermes Agent red-team orchestration.
 
 ## Repository rules
 
@@ -11,7 +11,7 @@ red-team evaluation.
 - Do not add Spanish text, even when the surrounding private workbench uses Spanish.
 - Preserve upstream history, attribution, notices, and the AGPL-3.0-or-later license.
 - Keep `upstream` pointed at `JailbrokenAI/wallbreaker` and `origin` pointed at
-  `Yivas/wallbreaker-criterion`.
+  `Yivas/wallbreaker-hermes`.
 - Never commit secrets, real prompts, conversations, credentials, runtime logs, or
   generated attack artifacts.
 

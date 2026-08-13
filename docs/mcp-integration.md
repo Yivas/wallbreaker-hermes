@@ -1,6 +1,6 @@
-# Wallbreaker MCP Integration
+# Wallbreaker Hermes MCP Integration
 
-Connect wallbreaker's red-teaming capabilities + p4rs3lt0ngv3's transform toolkit as
+Connect Wallbreaker Hermes red-teaming capabilities + p4rs3lt0ngv3's transform toolkit as
 native tools to any MCP-compatible agent: Claude Code, Cursor, Windsurf, Gemini CLI,
 Eragon, Codex CLI, or any client that implements the Model Context Protocol over stdio.
 
@@ -16,8 +16,8 @@ Eragon, Codex CLI, or any client that implements the Model Context Protocol over
   ```
 - **Git** — repo must be cloned:
   ```bash
-  git clone https://github.com/JailbrokenAI/wallbreaker
-  cd wallbreaker
+  git clone https://github.com/Yivas/wallbreaker-hermes
+  cd wallbreaker-hermes
   ```
 - **wallbreaker installed** — from the cloned repo:
   ```bash
