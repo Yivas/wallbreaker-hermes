@@ -1,6 +1,19 @@
-# wallbreaker — project notes
+# Wallbreaker Criterion project notes
 
-Red-team harness: configurable agentic LLM terminal with Parseltongue + L1B3RT4S.
+Wallbreaker Criterion is an AGPL-licensed fork of Wallbreaker for reproducible LLM
+red-team evaluation.
+
+## Repository rules
+
+- Use English for everything in this repository: source code, identifiers, comments,
+  docstrings, tests, fixtures, user-facing text, documentation, issues, pull requests,
+  release notes, branch names, and commit messages.
+- Do not add Spanish text, even when the surrounding private workbench uses Spanish.
+- Preserve upstream history, attribution, notices, and the AGPL-3.0-or-later license.
+- Keep `upstream` pointed at `JailbrokenAI/wallbreaker` and `origin` pointed at
+  `Yivas/wallbreaker-criterion`.
+- Never commit secrets, real prompts, conversations, credentials, runtime logs, or
+  generated attack artifacts.
 
 ## Architecture
 - `providers/` normalize OpenAI and Anthropic wire formats to one event stream

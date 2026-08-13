@@ -1,4 +1,4 @@
-# Wallbreaker: AI Red-Team Harness
+# Wallbreaker Criterion: AI Red-Team Evaluation Harness
 
 ```
 ██╗    ██╗ █████╗ ██╗     ██╗     ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗
@@ -10,8 +10,9 @@
         break the wall · not the rules of engagement    ⚔  authorized testing only
 ```
 
-A Claude-Code-style terminal built for red-teaming LLMs (CLI command: `wallbreaker`). You talk to it like
-Claude Code; it reasons and calls tools in a loop. The backend is fully configurable, so
+Wallbreaker Criterion is an AGPL-licensed fork of Wallbreaker focused on reproducible LLM
+red-team evaluation. It provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
+that reasons and calls tools in a loop. The backend is fully configurable, so
 it runs on **OpenRouter**, the **Z.AI GLM coding plan**, the local **Claude Code CLI**, a
 local server, or any OpenAI-/Anthropic-compatible API (including third-party proxies via
 bearer-auth). It ships with a deep red-team toolkit: the **Parseltongue** transform engine,
@@ -67,9 +68,9 @@ an LLM judge, and reliability validation.
 
 ## Clone Repository 
 ```
-git clone https://github.com/JailbrokenAI/wallbreaker
+git clone https://github.com/Yivas/wallbreaker-criterion
 
-cd wallbreaker 
+cd wallbreaker-criterion
 ```
 
 ## Install

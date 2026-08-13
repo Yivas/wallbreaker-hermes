@@ -1,4 +1,4 @@
-# Contributing to Wallbreaker
+# Contributing to Wallbreaker Criterion
 
 Thanks for helping make LLM red-teaming better. By contributing you agree your work is
 licensed under the project's [AGPL-3.0-or-later](LICENSE) license, and that you'll use the tool
@@ -37,6 +37,8 @@ for the complete cross-platform setup and local development workflow.
 
 ## House rules
 
+- **Use English everywhere:** code, identifiers, docstrings, tests, fixtures, user-facing
+  text, documentation, issues, pull requests, releases, branch names, and commit messages.
 - **No comments or emoji in code.** Use short docstrings where they add real value.
 - **Presets are `.format()`-filled** — keep literal `{`/`}` out of templates (use pipes
   or brackets for dividers); `{request}` must be the only brace token. A test enforces this.
