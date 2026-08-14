@@ -96,6 +96,21 @@ model = "openai/gpt-4o-mini"
 # leak the harmful content in their thinking while the final answer refuses.
 # reasoning = true
 
+# Hermes Agent native laboratory target. This replaces the [target] block above when enabled.
+# It requires a dedicated clean checkout at the fixed revision documented in
+# docs/HERMES_LAB.md. The process keeps the host account's filesystem and network permissions;
+# this is not an operating-system sandbox.
+# [target]
+# protocol = "hermes-lab"
+# model = "fixture/model"
+# api_key_env = "FIXTURE_PROVIDER_KEY"
+# timeout = 90
+# hermes_provider = "fixture-provider"
+# hermes_runtime = "C:/lab/hermes-agent"
+# hermes_python = "C:/lab/hermes-agent/.venv/Scripts/python.exe"
+# hermes_manifest = "C:/lab/manifests/clean.json"
+# hermes_context_root = "C:/lab/context"  # selected manifests only
+
 # If the target ACCEPTS a system prompt but is hardened against system-level jailbreaks
 # (the model only follows attacks placed in the USER turn), set system_mode = "merge" so
 # the harness folds any system prompt into the first user message. Every attack tool

@@ -302,8 +302,10 @@ class RthApp(App):
         self._cmd_menu_items: list[str] = []
         self._session_picker_open = False
         self._session_picker_items: list[str] = []
+        self._hermes_lab = getattr(config.target, "protocol", "") == "hermes-lab"
+        self._log_preference = bool(prefs.get("log", True))
         self.runlog = RunLog()
-        self.runlog.enabled = bool(prefs.get("log", True))
+        self.runlog.enabled = self._log_preference and not self._hermes_lab
         if config.target:
             self.runlog.target_model = config.target.model
         self.tokens_in = 0
@@ -345,7 +347,7 @@ class RthApp(App):
             "auto": self.auto,
             "rounds": self.max_rounds,
             "exit_on_finish": self.exit_on_finish,
-            "log": self.runlog.enabled,
+            "log": self._log_preference,
             "judge": self.judge_enabled,
             "judge_model": self.judge_model_override,
         })
@@ -362,7 +364,7 @@ class RthApp(App):
         }
 
     def _autosave(self) -> None:
-        if not self.history:
+        if self._hermes_lab or not self.history:
             return
         try:
             from ..session import autosave_path, save_session
@@ -1522,8 +1524,16 @@ class RthApp(App):
         ))
 
     def _cmd_log(self, rest: list[str]) -> None:
+        if self._hermes_lab:
+            self.runlog.enabled = False
+            self._mount(widgets.info_panel(
+                "run logging is disabled for Hermes laboratory targets",
+                title="log",
+            ))
+            return
         if rest and rest[0].lower() in ("on", "off", "true", "false"):
-            self.runlog.enabled = rest[0].lower() in ("on", "true")
+            self._log_preference = rest[0].lower() in ("on", "true")
+            self.runlog.enabled = self._log_preference
             self._save_prefs()
         self._mount(widgets.info_panel(
             f"run logging {'on' if self.runlog.enabled else 'off'}\n"
@@ -2502,6 +2512,11 @@ class RthApp(App):
             return
         path = rest[1] if len(rest) > 1 else "session.json"
         if action == "save":
+            if self._hermes_lab:
+                self._mount(widgets.error_panel(
+                    "session persistence is disabled for Hermes laboratory targets"
+                ))
+                return
             meta = self._session_meta()
             try:
                 save_session(path, self.history, meta)
@@ -2517,6 +2532,11 @@ class RthApp(App):
             self._mount(widgets.error_panel("usage: /session save|load [path]"))
 
     def _cmd_save(self, rest: list[str]) -> None:
+        if self._hermes_lab:
+            self._mount(widgets.error_panel(
+                "transcript persistence is disabled for Hermes laboratory targets"
+            ))
+            return
         path = rest[0] if rest else "transcript.md"
         lines = []
         for msg in self.history:

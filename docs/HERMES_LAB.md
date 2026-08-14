@@ -1,0 +1,120 @@
+# Hermes Native Laboratory
+
+Wallbreaker Hermes can use a dedicated Hermes Agent checkout as an opt-in, single-turn text
+target. The adapter creates a new home and working directory for every inference, verifies the
+effective request before network access, runs `hermes -z`, compares selected context files, and
+deletes the replica.
+
+This mode is not an operating-system sandbox. The Hermes process keeps the filesystem, process,
+and network permissions of the account that launches Wallbreaker.
+
+## Fixed Baseline
+
+The first adapter supports this Hermes Agent revision only:
+
+- Release: `v2026.8.13`
+- Package: `0.20.1`
+- Commit: `f80f453ae0679347e38abc917c7f94f717bf96c5`
+
+Use a dedicated clean checkout. Do not point the adapter at an operational Hermes installation.
+The adapter rejects a different Git commit, a dirty worktree, a Python environment that imports
+Hermes from another path, package-root dotenv files, and an active managed scope.
+
+## Target Configuration
+
+Set `protocol = "hermes-lab"` only on `[target]`:
+
+```toml
+[target]
+protocol = "hermes-lab"
+model = "fixture/model"
+api_key_env = "FIXTURE_PROVIDER_KEY"
+timeout = 90
+
+hermes_provider = "fixture-provider"
+hermes_runtime = "C:/lab/hermes-agent"
+hermes_python = "C:/lab/hermes-agent/.venv/Scripts/python.exe"
+hermes_manifest = "C:/lab/manifests/clean.json"
+# hermes_context_root = "C:/lab/context"
+```
+
+`api_key_env` must name the environment variable that the selected Hermes provider already
+understands. Wallbreaker passes that credential to the child process but never writes its value to
+the replica.
+
+The adapter does not accept `base_url`, inline `api_key`, backend pinning, provider caching,
+reasoning, or a custom system prompt on this target.
+
+## Manifests
+
+A clean replica uses no selected context:
+
+```json
+{
+  "schema": "wh-hermes-fixture/v1",
+  "mode": "clean",
+  "provider": "fixture-provider",
+  "model": "fixture/model",
+  "files": [],
+  "expected_tool_count": 0
+}
+```
+
+A selected replica accepts four logical paths:
+
+```json
+{
+  "schema": "wh-hermes-fixture/v1",
+  "mode": "selected",
+  "provider": "fixture-provider",
+  "model": "fixture/model",
+  "files": [
+    "SOUL.md",
+    "memories/MEMORY.md",
+    "memories/USER.md",
+    "workspace/AGENTS.md"
+  ],
+  "expected_tool_count": 0
+}
+```
+
+Set `hermes_context_root` for selected mode. The paths in `files` resolve below that root.
+`workspace/AGENTS.md` becomes `AGENTS.md` in the temporary working directory; the other files go
+to the temporary Hermes home.
+
+The copier rejects unknown paths, path collisions, symlinks, junctions, reparse points, hard
+links, Windows network paths, invalid UTF-8, oversized files, and common credential patterns.
+Pattern matching cannot prove that arbitrary private text contains no unknown secret. Review
+selected context before use.
+
+## Request Gate
+
+Each inference follows this sequence:
+
+1. Verify the fixed runtime, manifest, selected files, environment, and temporary-root permissions.
+2. Build a minimal Hermes home with no MCP configuration and only the Wallbreaker probe plugin.
+3. Start a preflight `hermes -z` process with the same prompt and configuration as the real run.
+4. Let Hermes build the effective request, then record roles, sizes, ephemeral hashes, provider,
+   model, and tool/MCP counts.
+5. Exit the preflight process from `pre_api_request`, before the provider call.
+6. Recheck sealed fingerprints and start the real process.
+7. Repeat the zero-tools/MCP assertion immediately before the provider call. A `pre_tool_call` hook
+   blocks any later tool attempt as a secondary control.
+8. Compare the selected source files, terminate the process tree when needed, and delete the
+   replica.
+
+Any tool, MCP server, fingerprint change, source change, timeout, unverified process exit, or
+cleanup failure invalidates the run.
+
+## Supported Surface
+
+The first adapter accepts one user text message and one final text response. Existing Wallbreaker
+tools can reuse it when every fire fits that shape. Each fire receives a fresh replica.
+
+It rejects conversation continuation, history, target system prompts, developer messages,
+assistant prefill, profiles, directives, selected skills, multimodal input, streamed reasoning,
+temperature overrides, target result caching, CoT recovery, and tools.
+
+BreakVault autoarchiving, run logs, automatic and manual session saves, transcript exports, and
+`finish` artifacts are disabled for Hermes targets. Prompt and response data remain in process
+memory and on the active terminal only; capture anything needed before ending the run.

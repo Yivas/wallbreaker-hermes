@@ -12,8 +12,9 @@
 
 Wallbreaker Hermes is an AGPL-licensed fork of
 [Wallbreaker](https://github.com/JailbrokenAI/wallbreaker). It preserves the standard
-Wallbreaker harness and is preparing an opt-in mode for autonomous, sandboxed red-teaming of
-Hermes Agent runtimes. It provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
+Wallbreaker harness and adds an opt-in native laboratory target for Hermes Agent runtimes. The
+laboratory uses an ephemeral home but does not provide operating-system sandboxing. Wallbreaker
+provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
 that reasons and calls tools in a loop. The backend is fully configurable, so
 it runs on **OpenRouter**, the **Z.AI GLM coding plan**, the local **Claude Code CLI**, a
 local server, or any OpenAI-/Anthropic-compatible API (including third-party proxies via
@@ -28,10 +29,10 @@ an LLM judge, and reliability validation.
 ## Project status
 
 The standard Wallbreaker CLI, TUI, dashboard, MCP server, attack tools, judge, and reliability
-validation work as documented below. The Hermes runtime mode is planned and not yet released.
-It will target an ephemeral Hermes home, exercise the permitted identity, instructions,
-profiles, prefill, memory, and tools, compare state before and after each run, and destroy the
-sandbox on completion.
+validation work as documented below. The unreleased Hermes laboratory adapter targets the fixed
+Hermes Agent `v2026.8.13` revision. It supports one text turn with a clean home or selected SOUL,
+memory, and working-directory rules. It rejects tools, MCP, custom prompt layers, profiles,
+prefill, continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md).
 
 The Python package and commands remain `wallbreaker` and `wb` for upstream compatibility.
 
@@ -103,6 +104,10 @@ wallbreaker check                            # validate it: profiles, keys, targ
 Profiles set the attacker brain; `[target]` is the model under attack; `[judge]` grades
 replies. Keys can be inline or from env. OpenRouter endpoints support `provider` pinning
 and a `timeout` override.
+
+Hermes Agent targets use `protocol = "hermes-lab"` with a dedicated checkout, Python
+interpreter, provider credential environment variable, and closed manifest. They remain opt-in
+and do not change any standard target defaults. See [Hermes Native Laboratory](docs/HERMES_LAB.md).
 
 ```toml
 default_profile = "glm"

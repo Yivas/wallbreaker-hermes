@@ -179,6 +179,18 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             "Error: the target is an image-generation model (modality='image'). "
             "Use query_image_target to attack it - it saves and vision-grades the picture."
         )
+    hermes_lab = ctx.config.target.protocol == "hermes-lab"
+    if hermes_lab:
+        blocked = []
+        for key in ("system", "system_transforms", "history", "think_seed"):
+            if args.get(key):
+                blocked.append(key)
+        if _cache_enabled(args, ctx):
+            blocked.append("cache")
+        if args.get("recover_cot") not in (None, "", "off"):
+            blocked.append("recover_cot")
+        if blocked:
+            return "Error: Hermes laboratory targets do not support " + ", ".join(blocked) + "."
 
     transforms = args.get("transforms") or []
     if isinstance(transforms, str):
@@ -243,6 +255,8 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
         reply, reasoning, stop, empty = await _fire(provider, messages, system, max_tokens)
     except Exception as exc:  # noqa: BLE001
         dt = time.monotonic() - start
+        if hermes_lab:
+            return f"[Hermes laboratory error after {dt:.1f}s] {type(exc).__name__}: {str(exc)[:180]}"
         return (
             f"[target error after {dt:.1f}s] {type(exc).__name__}: {str(exc)[:180]}\n"
             "The target failed (timeout/network). Retry, lower max_tokens, or try another technique."
@@ -252,7 +266,7 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
     # "it came back empty" failure - one retry at a higher ceiling recovers the answer
     # instead of mis-scoring it REFUSED or burning a manual diagnosis turn.
     bumped_to: int | None = None
-    if empty and reasoning.strip() and max_tokens < _TRUNC_CEILING:
+    if not hermes_lab and empty and reasoning.strip() and max_tokens < _TRUNC_CEILING:
         bumped_to = min(max_tokens * 2, _TRUNC_CEILING)
         ctx.emit(f"query_target: empty answer + populated CoT (stop={stop}); auto-retry at max_tokens={bumped_to}")
         try:
@@ -261,29 +275,31 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             pass
     dt = time.monotonic() - start
     # Recover hidden CoT (Method 1/5/6) so the attacker brain always sees thinking when possible.
-    from ._cot_recover import recover_cot, resolve_method, resolve_weak_model
+    cot, details, recover_note = "", [], ""
+    if not hermes_lab:
+        from ._cot_recover import recover_cot, resolve_method, resolve_weak_model
 
-    recover_method = resolve_method(args, ctx)
-    weak_model = resolve_weak_model(args, ctx)
-    cot, details, recover_note = await recover_cot(
-        provider=provider,
-        endpoint=ctx.config.target,
-        messages=messages,
-        system=system,
-        reply=reply or "",
-        reasoning=reasoning or "",
-        method=recover_method,
-        weak_model=weak_model,
-        max_tokens=min(max(max_tokens, 1024), 4096),
-        timeout=float(args.get("timeout", 90)),
-        emit=ctx.emit,
-    )
+        recover_method = resolve_method(args, ctx)
+        weak_model = resolve_weak_model(args, ctx)
+        cot, details, recover_note = await recover_cot(
+            provider=provider,
+            endpoint=ctx.config.target,
+            messages=messages,
+            system=system,
+            reply=reply or "",
+            reasoning=reasoning or "",
+            method=recover_method,
+            weak_model=weak_model,
+            max_tokens=min(max(max_tokens, 1024), 4096),
+            timeout=float(args.get("timeout", 90)),
+            emit=ctx.emit,
+        )
     if recover_note:
         ctx.emit(recover_note)
         enc_note += f" | {recover_note}"
 
     # open a hands-on conversation: continue_target picks up from here (RAW reply threads back)
-    ctx.target_thread = _persist_thread(messages, reply)
+    ctx.target_thread = [] if hermes_lab else _persist_thread(messages, reply)
     if ctx.target_thread and details:
         last = ctx.target_thread[-1]
         if last.role == "assistant":
@@ -317,7 +333,8 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             "\n\n<<raw encoded reply (what the output classifier saw), excerpt>>\n"
             f"{raw_encoded[:300]}"
         )
-    header = f"[target {target.model} @ {target.base_url} | {dt:.1f}s{enc_note}{dec_note}]\n"
+    location = "native laboratory" if hermes_lab else f"@ {target.base_url}"
+    header = f"[target {target.model} {location} | {dt:.1f}s{enc_note}{dec_note}]\n"
     return header + body + note
 
 
@@ -327,6 +344,8 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
         return "Error: 'prompt' is required (your follow-up turn)"
     if ctx.config.target is None:
         return "Error: no [target] endpoint configured."
+    if ctx.config.target.protocol == "hermes-lab":
+        return "Error: Hermes laboratory targets support one user turn only."
     if not ctx.target_thread:
         return (
             "No open target conversation. Fire query_target first, then use "

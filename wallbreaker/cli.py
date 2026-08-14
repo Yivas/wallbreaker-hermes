@@ -321,6 +321,7 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
     provider = build_provider(endpoint)
     registry = None if args.no_tools else build_registry(config)
     runlog = RunLog()
+    runlog.enabled = getattr(config.target, "protocol", "") != "hermes-lab"
     runlog.event("objective", text=args.prompt)
     runlog.user(args.prompt)
     if registry is not None:

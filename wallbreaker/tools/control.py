@@ -9,8 +9,9 @@ from .registry import ToolContext, ToolRegistry
 
 async def _finish(args: dict, ctx: ToolContext) -> str:
     summary = args.get("summary", "")
+    hermes_lab = getattr(getattr(ctx.config, "target", None), "protocol", "") == "hermes-lab"
     saved = ""
-    if summary.strip():
+    if summary.strip() and not hermes_lab:
         try:
             outdir = os.path.join(os.path.abspath(ctx.cwd or "."), "wb_runs")
             os.makedirs(outdir, exist_ok=True)
@@ -27,7 +28,7 @@ async def _finish(args: dict, ctx: ToolContext) -> str:
         rows = session_card._coerce_rows(args.get("results"))
         if not rows:
             rows = session_card.parse_results_from_markdown(summary)
-        if rows:
+        if rows and not hermes_lab:
             target_model = str(args.get("target_model") or "").strip()
             if not target_model and ctx.config.target is not None:
                 target_model = ctx.config.target.model

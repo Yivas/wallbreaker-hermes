@@ -807,7 +807,12 @@ def create_app(
 
     def _new_dashboard_runlog() -> RunLog:
         return _reserve_runlog_path(
-            RunLog(directory=str(sessions)), reserved_run_paths
+            RunLog(
+                directory=str(sessions),
+                enabled=getattr(getattr(config, "target", None), "protocol", "")
+                != "hermes-lab",
+            ),
+            reserved_run_paths,
         )
 
     console_runlog = _new_dashboard_runlog()
@@ -1509,7 +1514,7 @@ def create_app(
             "response": result.content,
             "is_error": result.is_error,
             "verdict": verdict,
-            "run_log": console_runlog.path.name,
+            "run_log": console_runlog.path.name if console_runlog._started else "",
             "turn": turn,
             "conversation": _console_conversation_view(),
         }
@@ -1964,14 +1969,18 @@ def create_app(
             "capability_finished", execution_id=ctx.execution.id,
             capability_id=capability_id, error=bool(result.is_error),
         )
-        history_index.index_file(runlog.path, force=True)
+        if runlog._started:
+            history_index.index_file(runlog.path, force=True)
         ctx.emit(
             "result", actor="tool", tool=tool_name, content=result.content,
             error=bool(result.is_error), run_id=runlog.path.name,
         )
         if result.is_error:
             raise RuntimeError(result.content)
-        return {"content": result.content, "run_log": runlog.path.name}
+        return {
+            "content": result.content,
+            "run_log": runlog.path.name if runlog._started else "",
+        }
 
     async def _tui_execution(ctx, capability_id: str, args: dict):
         """Headless adapters for canonical TUI capabilities.

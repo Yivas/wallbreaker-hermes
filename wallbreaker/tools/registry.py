@@ -88,7 +88,7 @@ class ToolContext:
         # Legacy engagement kwargs (routed to EngagementContext)
         current_objective: str = "",
         attacker_model: str = "",
-        vault_enabled: bool = True,
+        vault_enabled: bool | None = None,
         target_thread: list | None = None,
         target_system: str | None = None,
         target_reasoning: str = "",
@@ -102,10 +102,14 @@ class ToolContext:
         self.confine_reads = confine_reads
         self._run_seq: int = 0
         # Build sub-contexts
+        if vault_enabled is None:
+            target = getattr(config, "target", None)
+            vault_enabled = getattr(target, "protocol", "") != "hermes-lab"
+        resolved_vault_enabled = bool(vault_enabled)
         self.engagement = engagement or EngagementContext(
             current_objective=current_objective,
             attacker_model=attacker_model,
-            vault_enabled=vault_enabled,
+            vault_enabled=resolved_vault_enabled,
             target_thread=target_thread if target_thread is not None else [],
             target_system=target_system,
             target_reasoning=target_reasoning,

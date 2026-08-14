@@ -90,6 +90,11 @@ class Endpoint:
     # otherwise let a 5m cache go cold and re-pay the full write. Writes bill 2x at 1h vs 1.25x
     # at 5m, so it wins the moment one reuse lands after the 5m mark. Byte-identical output.
     cache_ttl: str = "5m"
+    hermes_runtime: str = ""
+    hermes_python: str = ""
+    hermes_provider: str = ""
+    hermes_manifest: str = ""
+    hermes_context_root: str = ""
 
     def resolved_key(self) -> str:
         if self.api_key:
@@ -232,14 +237,20 @@ def doctor_report(config: Config) -> tuple[str, bool]:
     return "\n".join(lines), ok
 
 
-def _endpoint_from_table(name: str, table: dict, *, require_model: bool = False) -> Endpoint:
+def _endpoint_from_table(
+    name: str,
+    table: dict,
+    *,
+    require_model: bool = False,
+    allow_hermes_lab: bool = False,
+) -> Endpoint:
     protocol = str(table.get("protocol", "")).lower()
     # claude-code drives the local `claude` CLI - it authenticates itself and needs no
     # base_url/api_key. 'xai' is native xAI (api.x.ai) - OpenAI-compatible wire format whose
     # base_url defaults to the xAI host, so it too needs only 'protocol'. Provider profiles
     # may omit a default model while their catalog is being discovered; concrete
     # target/judge/art endpoints still require one (require_model).
-    if protocol in ("claude-code", "xai"):
+    if protocol in ("claude-code", "xai", "hermes-lab"):
         required = ("protocol",)
     else:
         required = ("protocol", "base_url")
@@ -248,11 +259,13 @@ def _endpoint_from_table(name: str, table: dict, *, require_model: bool = False)
     missing = [k for k in required if k not in table]
     if missing:
         raise ConfigError(f"Endpoint '{name}' missing keys: {', '.join(missing)}")
-    if protocol not in ("openai", "anthropic", "claude-code", "xai"):
+    if protocol not in ("openai", "anthropic", "claude-code", "xai", "hermes-lab"):
         raise ConfigError(
             f"Endpoint '{name}' has invalid protocol '{protocol}' "
-            f"(expected 'openai', 'anthropic', 'xai', or 'claude-code')"
+            f"(expected 'openai', 'anthropic', 'xai', 'claude-code', or 'hermes-lab')"
         )
+    if protocol == "hermes-lab" and not allow_hermes_lab:
+        raise ConfigError("Protocol 'hermes-lab' is available only for [target].")
     modality = str(table.get("modality", "text")).lower()
     if modality not in ("text", "image"):
         raise ConfigError(
@@ -264,6 +277,31 @@ def _endpoint_from_table(name: str, table: dict, *, require_model: bool = False)
             f"Endpoint '{name}': modality 'image' requires protocol 'openai' "
             f"(OpenRouter image generation rides the chat-completions API)"
         )
+    if protocol == "hermes-lab":
+        hermes_required = (
+            "api_key_env",
+            "hermes_runtime",
+            "hermes_python",
+            "hermes_provider",
+            "hermes_manifest",
+        )
+        hermes_missing = [key for key in hermes_required if not str(table.get(key, "")).strip()]
+        if hermes_missing:
+            raise ConfigError(
+                f"Endpoint '{name}' missing keys: {', '.join(hermes_missing)}"
+            )
+        if table.get("base_url") or table.get("api_key") or table.get("provider"):
+            raise ConfigError(
+                f"Endpoint '{name}' must not set base_url, api_key, or provider for hermes-lab."
+            )
+        if modality != "text" or bool(table.get("reasoning", False)):
+            raise ConfigError(f"Endpoint '{name}' must use text without reasoning for hermes-lab.")
+        if table.get("system_prompt") or table.get("system_prompt_file"):
+            raise ConfigError(f"Endpoint '{name}' cannot set a system prompt for hermes-lab.")
+        if "system_mode" in table and str(table["system_mode"]).lower() != "drop":
+            raise ConfigError(f"Endpoint '{name}' must use system_mode='drop' for hermes-lab.")
+        if bool(table.get("cache", False)):
+            raise ConfigError(f"Endpoint '{name}' cannot enable provider caching for hermes-lab.")
     base_url = str(table.get("base_url", "")).rstrip("/")
     api_key_env = str(table.get("api_key_env", ""))
     api_key = str(table.get("api_key", ""))
@@ -292,15 +330,20 @@ def _endpoint_from_table(name: str, table: dict, *, require_model: bool = False)
         timeout=float(table.get("timeout", 0) or 0),
         modality=modality,
         reasoning=bool(table.get("reasoning", False)),
-        system_mode=str(table.get("system_mode", "default")).lower(),
+        system_mode="drop" if protocol == "hermes-lab" else str(table.get("system_mode", "default")).lower(),
         system_prompt_file=str(table.get("system_prompt_file", "")),
         system_prompt=str(table.get("system_prompt", "")),
         auth_style=str(table.get("auth_style", "x-api-key")).lower(),
         inference_path=str(table.get("inference_path", "")),
         models_path=str(table.get("models_path", "")),
         jailbreak_file=str(table.get("jailbreak_file", "")),
-        cache=bool(table.get("cache", True)),
+        cache=False if protocol == "hermes-lab" else bool(table.get("cache", True)),
         cache_ttl="1h" if str(table.get("cache_ttl", "5m")).lower() == "1h" else "5m",
+        hermes_runtime=str(table.get("hermes_runtime", "")),
+        hermes_python=str(table.get("hermes_python", "")),
+        hermes_provider=str(table.get("hermes_provider", "")),
+        hermes_manifest=str(table.get("hermes_manifest", "")),
+        hermes_context_root=str(table.get("hermes_context_root", "")),
     )
 
 
@@ -380,7 +423,9 @@ def load_config(path: str | Path | None = None) -> Config:
         raise ConfigError(f"default_profile '{default_profile}' is not defined")
     target = None
     if "target" in data:
-        target = _endpoint_from_table("target", data["target"], require_model=True)
+        target = _endpoint_from_table(
+            "target", data["target"], require_model=True, allow_hermes_lab=True
+        )
 
     judge = None
     if "judge" in data:
