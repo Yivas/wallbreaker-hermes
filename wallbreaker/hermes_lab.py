@@ -251,6 +251,7 @@ class HermesLabReplica:
             if code != 0:
                 raise ProviderError(f"Hermes laboratory process exited with code {code}.")
             self._validate_attestation(self.run_attestation_path, "run")
+            self._validate_runtime()
             if self._snapshot(
                 self._runtime_files, limit=_MAX_RUNTIME_FILE_BYTES
             ) != self._runtime_snapshot:
@@ -320,7 +321,11 @@ class HermesLabReplica:
             raise ProviderError("Hermes runtime and Python paths must be absolute.")
         if _is_link_or_reparse(self.runtime) or _is_link_or_reparse(self.python):
             raise ProviderError("Hermes runtime paths cannot be links or reparse points.")
-        if any(path.is_file() for path in runtime.glob(".env*")) or (runtime / ".op.env").exists():
+        allowed_dotenv = {".env.example", ".envrc"}
+        if any(
+            path.is_file() and path.name not in allowed_dotenv
+            for path in runtime.glob(".env*")
+        ) or (runtime / ".op.env").exists():
             raise ProviderError("Hermes package root contains a dotenv file.")
         if os.environ.get("HERMES_MANAGED_DIR", "").strip() or os.environ.get(
             "HERMES_MANAGED", ""

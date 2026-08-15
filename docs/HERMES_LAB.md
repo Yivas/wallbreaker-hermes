@@ -18,7 +18,9 @@ The first adapter supports this Hermes Agent revision only:
 
 Use a dedicated clean checkout. Do not point the adapter at an operational Hermes installation.
 The adapter rejects a different Git commit, a dirty worktree, a Python environment that imports
-Hermes from another path, package-root dotenv files, and an active managed scope.
+Hermes from another path, unexpected package-root dotenv files, and an active managed scope. The
+tracked `.env.example` and `.envrc` files in the fixed baseline are permitted only while the Git
+checkout remains clean.
 
 ## Target Configuration
 

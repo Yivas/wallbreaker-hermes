@@ -310,10 +310,11 @@ def test_context_ancestor_is_locked_until_cleanup(tmp_path, monkeypatch):
     assert moved.is_dir()
 
 
-def test_runtime_rejects_package_dotenv_before_git(tmp_path):
+@pytest.mark.parametrize("name", [".env", ".env.local", ".op.env"])
+def test_runtime_rejects_package_dotenv_before_git(tmp_path, name):
     manifest = _manifest(tmp_path / "manifest.json")
     endpoint = _endpoint(tmp_path, manifest)
-    (Path(endpoint.hermes_runtime) / ".env").write_text("FIXTURE=value", encoding="utf-8")
+    (Path(endpoint.hermes_runtime) / name).write_text("FIXTURE=value", encoding="utf-8")
     replica = HermesLabReplica(endpoint, 5)
     with pytest.raises(ProviderError, match="dotenv"):
         replica._validate_runtime()
@@ -364,6 +365,8 @@ def test_runtime_requires_tracked_startup_modules(tmp_path, monkeypatch):
     manifest = _manifest(tmp_path / "manifest.json")
     replica = HermesLabReplica(_endpoint(tmp_path, manifest), 5)
     runtime = replica.runtime
+    (runtime / ".env.example").write_text("FIXTURE_KEY=\n", encoding="utf-8")
+    (runtime / ".envrc").write_text("use flake\n", encoding="utf-8")
     origins = {}
     for name, relative in {
         "run_agent": "run_agent.py",
@@ -417,6 +420,26 @@ def test_runtime_requires_tracked_startup_modules(tmp_path, monkeypatch):
             stdout=json.dumps({"version": "0.20.0", "origins": origins}),
         ),
     )
+    with pytest.raises(ProviderError, match="approved baseline"):
+        replica._validate_runtime()
+
+
+@pytest.mark.parametrize("name", [".env.example", ".envrc"])
+def test_runtime_rejects_untracked_baseline_dotenv(tmp_path, monkeypatch, name):
+    manifest = _manifest(tmp_path / "manifest.json")
+    replica = HermesLabReplica(_endpoint(tmp_path, manifest), 5)
+    (replica.runtime / name).write_text("FIXTURE_KEY=\n", encoding="utf-8")
+
+    def fake_git(*args):
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(replica.runtime)
+        if args == ("rev-parse", "HEAD"):
+            return HERMES_BASELINE_SHA
+        if args == ("status", "--porcelain", "--untracked-files=all"):
+            return f"?? {name}"
+        raise AssertionError(args)
+
+    monkeypatch.setattr(replica, "_git", fake_git)
     with pytest.raises(ProviderError, match="approved baseline"):
         replica._validate_runtime()
 
@@ -644,6 +667,29 @@ def test_replica_change_during_preflight_fails_closed(tmp_path, monkeypatch):
 
     monkeypatch.setattr(replica, "_run_process", fake_run)
     with pytest.raises(ProviderError, match="replica changed during preflight"):
+        asyncio.run(replica.execute("Synthetic prompt", 1024))
+
+
+@pytest.mark.parametrize("name", [".env.example", ".envrc"])
+def test_runtime_dotenv_change_during_execution_fails_closed(tmp_path, monkeypatch, name):
+    replica = _replica(tmp_path, monkeypatch)
+    dotenv = replica.runtime / name
+    dotenv.write_text("tracked\n", encoding="utf-8")
+
+    def validate_runtime():
+        if dotenv.read_text(encoding="utf-8") != "tracked\n":
+            raise ProviderError("Hermes runtime is not the clean approved baseline checkout.")
+
+    async def fake_run(mode, prompt):
+        _write_attestation(replica, mode)
+        if mode == "preflight":
+            return 86, b"", b""
+        dotenv.write_text("changed\n", encoding="utf-8")
+        return 0, b"Synthetic response", b""
+
+    monkeypatch.setattr(replica, "_validate_runtime", validate_runtime)
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    with pytest.raises(ProviderError, match="approved baseline"):
         asyncio.run(replica.execute("Synthetic prompt", 1024))
 
 
