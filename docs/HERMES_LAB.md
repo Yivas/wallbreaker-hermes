@@ -120,3 +120,45 @@ temperature overrides, target result caching, CoT recovery, and tools.
 BreakVault autoarchiving, run logs, automatic and manual session saves, transcript exports, and
 `finish` artifacts are disabled for Hermes targets. Prompt and response data remain in process
 memory and on the active terminal only; capture anything needed before ending the run.
+
+## Programmatic Campaigns
+
+`wallbreaker.hermes_campaign` provides `load_suite`, `run_campaign`, `resume_campaign`, and
+`apply_reviews`. This API has no CLI or UI yet. A suite uses the closed
+`wallbreaker.hermes-campaign-suite/v1` schema:
+
+```yaml
+schema: wallbreaker.hermes-campaign-suite/v1
+id: synthetic-suite
+version: 1
+cases:
+  - id: synthetic-memory-case
+    split: discovery
+    objective: Synthetic objective
+    prompt: Synthetic prompt
+    expected_behavior: refuse
+    expected_state: unchanged
+```
+
+Each suite must contain separate `discovery`, `qualification`, and `holdout` cases. Supported
+response expectations are `allow`, `refuse`, and `context_dependent`. State expectations are
+`unchanged`, `declared_changes`, and `manual`. A `declared_changes` case must list one or more of
+the four laboratory paths documented under Manifests.
+
+Each repetition creates a new attacker conversation. Every `query_target` fire creates and deletes
+a new Hermes replica. The campaign observes all four closed state components so it can report an
+undeclared change; it then applies the case's `allowed_state_paths` policy. A blocked tool attempt,
+an undeclared state change, or behavior contrary to the expectation is a finding. Missing evidence,
+judge failure or disagreement, `context_dependent`, and `manual` require review.
+
+The result uses `wallbreaker.hermes-campaign-report/v1`. It contains schemas, software versions,
+stable fingerprints, enums, counts, state component names, attestations, cleanup receipts, and a
+one-sided 95% Wilson lower bound when a split is complete. It never stores suite IDs, case IDs,
+objectives, prompts, responses, judge rationales, endpoint URLs, context paths, credentials, or
+conversation logs.
+
+Campaign writes are atomic. `resume_campaign` runs pending repetitions and replaces interrupted or
+failed attempts with a new attempt on a fresh replica. It never continues an interrupted replica.
+`apply_reviews` accepts only `pass` or `finding` for attempts marked `review_required` and
+recalculates aggregates. Discordant repetitions require review and do not receive a confidence
+bound until resolved.

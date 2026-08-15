@@ -804,7 +804,7 @@ async def test_provider_creates_a_fresh_replica_per_call(tmp_path, monkeypatch):
             created.append(self)
             self.cleanup_receipt = None
 
-        async def execute(self, prompt, max_tokens):
+        async def execute(self, prompt, max_tokens, **kwargs):
             self.cleanup_receipt = CleanupReceipt("success", True, True, True)
             return HermesLabResult("response", 1, 2, False, self.cleanup_receipt)
 
@@ -817,6 +817,75 @@ async def test_provider_creates_a_fresh_replica_per_call(tmp_path, monkeypatch):
     assert await provider.complete([user("one")]) == "response"
     assert await provider.complete([user("two")]) == "response"
     assert len(created) == 2
+
+
+@pytest.mark.parametrize(
+    "logical,component",
+    [
+        ("SOUL.md", "soul"),
+        ("memories/MEMORY.md", "memory"),
+        ("memories/USER.md", "user_memory"),
+        ("workspace/AGENTS.md", "rules"),
+    ],
+)
+def test_execute_reports_allowed_state_change(tmp_path, monkeypatch, logical, component):
+    source = tmp_path / "context"
+    path = source.joinpath(*logical.split("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Synthetic initial state", encoding="utf-8")
+    replica = _replica(
+        tmp_path,
+        monkeypatch,
+        mode="selected",
+        files=[logical],
+        context_root=source,
+    )
+
+    async def fake_run(mode, prompt):
+        _write_attestation(replica, mode)
+        if mode == "preflight":
+            return 86, b"", b""
+        replica._replica_files()[logical].write_text(
+            "Synthetic changed state", encoding="utf-8"
+        )
+        assert replica.tool_attempts_path is not None
+        replica.tool_attempts_path.write_text("1", encoding="utf-8")
+        return 0, b"Synthetic response", b""
+
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    result = asyncio.run(
+        replica.execute(
+            "Synthetic prompt",
+            1024,
+            allowed_state_paths=frozenset({logical}),
+            observe_tool_attempts=True,
+        )
+    )
+    assert result.evidence is not None
+    assert result.evidence.changed_components == (component,)
+    assert result.evidence.tool_attempt_count == 1
+    assert result.evidence.initial_state != result.evidence.final_state
+
+
+def test_probe_counts_blocked_tool_attempts(tmp_path, monkeypatch):
+    namespace = {}
+    exec(_PROBE_SOURCE, namespace)
+    path = tmp_path / "tool-attempts.txt"
+    path.write_text("0\n", encoding="utf-8")
+    monkeypatch.setenv("WALLBREAKER_HERMES_TOOL_ATTEMPTS", str(path))
+    assert namespace["_block_tool_call"]()["action"] == "block"
+    assert namespace["_block_tool_call"]()["action"] == "block"
+    assert path.read_text(encoding="utf-8") == "2"
+
+
+def test_invalid_tool_attempt_evidence_fails_closed(tmp_path, monkeypatch):
+    replica = _replica(tmp_path, monkeypatch)
+    replica.prepare(1024)
+    assert replica.tool_attempts_path is not None
+    replica.tool_attempts_path.write_text("invalid", encoding="utf-8")
+    with pytest.raises(ProviderError, match="tool-attempt evidence"):
+        replica._read_tool_attempts()
+    asyncio.run(replica.close())
 
 
 def test_query_target_rejects_blocked_hermes_features_before_provider(tmp_path):

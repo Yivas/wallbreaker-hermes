@@ -50,6 +50,7 @@ _RESERVED_ENV_KEYS = frozenset(
         "WALLBREAKER_HERMES_ATTESTATION",
         "WALLBREAKER_HERMES_PROBE_MODE",
         "WALLBREAKER_HERMES_SEAL",
+        "WALLBREAKER_HERMES_TOOL_ATTEMPTS",
         "WINDIR",
     }
 )
@@ -58,6 +59,13 @@ _ALLOWED_FILES = {
     "memories/MEMORY.md": ("home", "memories", "MEMORY.md"),
     "memories/USER.md": ("home", "memories", "USER.md"),
     "workspace/AGENTS.md": ("cwd", "AGENTS.md"),
+}
+HERMES_STATE_PATHS = frozenset(_ALLOWED_FILES)
+_STATE_COMPONENTS = {
+    "SOUL.md": "soul",
+    "memories/MEMORY.md": "memory",
+    "memories/USER.md": "user_memory",
+    "workspace/AGENTS.md": "rules",
 }
 _SECRET_PATTERNS = (
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -146,6 +154,17 @@ def _write_attestation(**kwargs):
 
 
 def _block_tool_call(**kwargs):
+    path = Path(os.environ["WALLBREAKER_HERMES_TOOL_ATTEMPTS"])
+    try:
+        count = int(path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        count = 0
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(str(count + 1))
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
     return {"action": "block", "message": "Hermes laboratory targets cannot call tools."}
 
 
@@ -168,12 +187,23 @@ class CleanupReceipt:
 
 
 @dataclass(frozen=True)
+class HermesLabEvidence:
+    preflight_fingerprint: str
+    run_fingerprint: str
+    initial_state: tuple[tuple[str, str], ...]
+    final_state: tuple[tuple[str, str], ...]
+    changed_components: tuple[str, ...]
+    tool_attempt_count: int
+
+
+@dataclass(frozen=True)
 class HermesLabResult:
     text: str
     input_tokens: int
     output_tokens: int
     replica_changed: bool
     cleanup: CleanupReceipt
+    evidence: HermesLabEvidence | None = None
 
 
 class HermesLabReplica:
@@ -190,6 +220,7 @@ class HermesLabReplica:
         self.usage_path: Path | None = None
         self.preflight_path: Path | None = None
         self.run_attestation_path: Path | None = None
+        self.tool_attempts_path: Path | None = None
         self._process: asyncio.subprocess.Process | None = None
         self._source_files: dict[str, Path] = {}
         self._runtime_files: dict[str, Path] = {}
@@ -218,6 +249,8 @@ class HermesLabReplica:
         self.usage_path = self.root / "usage.json"
         self.preflight_path = self.root / "preflight.json"
         self.run_attestation_path = self.root / "run-attestation.json"
+        self.tool_attempts_path = self.root / "tool-attempts.txt"
+        _write_private_text(self.tool_attempts_path, "0\n")
         self._write_runtime_files(max_tokens)
         self._copy_manifest_files(manifest["files"])
         self._source_snapshot = self._snapshot_sources()
@@ -225,15 +258,27 @@ class HermesLabReplica:
             self._runtime_files, limit=_MAX_RUNTIME_FILE_BYTES
         )
         self._replica_snapshot = self._snapshot(self._replica_files())
-        if self._source_snapshot != self._replica_snapshot:
+        copied_snapshot = {
+            logical: self._replica_snapshot[logical] for logical in self._source_snapshot
+        }
+        if self._source_snapshot != copied_snapshot:
             raise ProviderError("Hermes laboratory context changed while it was copied.")
         self._seal = self._current_seal()
 
-    async def execute(self, prompt: str, max_tokens: int) -> HermesLabResult:
+    async def execute(
+        self,
+        prompt: str,
+        max_tokens: int,
+        *,
+        allowed_state_paths: frozenset[str] = frozenset(),
+        observe_tool_attempts: bool = False,
+    ) -> HermesLabResult:
         if len(prompt) > _MAX_PROMPT_CHARS:
             raise ProviderError(
                 f"Hermes laboratory prompts are limited to {_MAX_PROMPT_CHARS} characters."
             )
+        if not allowed_state_paths <= HERMES_STATE_PATHS:
+            raise ProviderError("Hermes laboratory state policy contains a blocked path.")
         outcome = "error"
         try:
             self.prepare(max_tokens)
@@ -257,12 +302,35 @@ class HermesLabReplica:
             ) != self._runtime_snapshot:
                 raise ProviderError("Hermes laboratory runtime changed during execution.")
             usage = self._read_usage()
-            replica_changed = self._snapshot(self._replica_files()) != self._replica_snapshot
-            if replica_changed:
+            final_state = self._snapshot(self._replica_files())
+            changed_paths = {
+                logical
+                for logical, digest in final_state.items()
+                if self._replica_snapshot.get(logical) != digest
+            }
+            replica_changed = bool(changed_paths)
+            if changed_paths - allowed_state_paths:
                 raise ProviderError("Hermes laboratory replica changed during execution.")
+            tool_attempt_count = self._read_tool_attempts()
+            if tool_attempt_count and not observe_tool_attempts:
+                raise ProviderError("Hermes laboratory target attempted to call a tool.")
             text = stdout.decode("utf-8", "replace").rstrip("\r\n")
             if not text:
                 raise ProviderError("Hermes laboratory process returned no final response.")
+            evidence = HermesLabEvidence(
+                preflight_fingerprint=_fingerprint_attestation(
+                    self._validate_attestation(self.preflight_path, "preflight")
+                ),
+                run_fingerprint=_fingerprint_attestation(
+                    self._validate_attestation(self.run_attestation_path, "run")
+                ),
+                initial_state=tuple(sorted(self._replica_snapshot.items())),
+                final_state=tuple(sorted(final_state.items())),
+                changed_components=tuple(
+                    sorted(_STATE_COMPONENTS[path] for path in changed_paths)
+                ),
+                tool_attempt_count=tool_attempt_count,
+            )
             outcome = "success"
             receipt = await self.close(outcome)
             return HermesLabResult(
@@ -271,6 +339,7 @@ class HermesLabReplica:
                 output_tokens=usage[1],
                 replica_changed=replica_changed,
                 cleanup=receipt,
+                evidence=evidence,
             )
         except asyncio.CancelledError:
             outcome = "cancelled"
@@ -481,7 +550,7 @@ class HermesLabReplica:
         if self.home is None or self.cwd is None:
             return {}
         files: dict[str, Path] = {}
-        for logical in self._source_files:
+        for logical in _ALLOWED_FILES:
             parts = _ALLOWED_FILES[logical]
             base = self.home if parts[0] == "home" else self.cwd
             files[logical] = base.joinpath(*parts[1:])
@@ -600,6 +669,7 @@ class HermesLabReplica:
                 "WALLBREAKER_HERMES_PROBE_MODE": mode,
                 "WALLBREAKER_HERMES_ATTESTATION": str(attestation),
                 "WALLBREAKER_HERMES_SEAL": self._seal,
+                "WALLBREAKER_HERMES_TOOL_ATTEMPTS": str(self.tool_attempts_path),
             }
         )
         key_name = self.endpoint.api_key_env
@@ -744,6 +814,17 @@ class HermesLabReplica:
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return 0, 0
 
+    def _read_tool_attempts(self) -> int:
+        if self.tool_attempts_path is None:
+            raise ProviderError("Hermes laboratory tool-attempt evidence is missing.")
+        try:
+            count = int(self.tool_attempts_path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError) as exc:
+            raise ProviderError("Hermes laboratory tool-attempt evidence is invalid.") from exc
+        if count < 0:
+            raise ProviderError("Hermes laboratory tool-attempt evidence is invalid.")
+        return count
+
 
 def _is_within(path: Path, root: Path) -> bool:
     try:
@@ -769,6 +850,38 @@ def _content_digest(logical: str, content: bytes) -> str:
     digest.update(str(len(content)).encode("ascii"))
     digest.update(b"\0")
     digest.update(content)
+    return digest.hexdigest()
+
+
+def _fingerprint_attestation(data: dict) -> str:
+    encoded = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def fingerprint_manifest_context(endpoint: Endpoint) -> str:
+    replica = HermesLabReplica(endpoint, endpoint.timeout or 120)
+    manifest = replica._load_manifest()
+    digest = hashlib.sha256(_read_regular_bytes(replica.manifest_path, _MAX_FILE_BYTES))
+    files = manifest["files"]
+    if not files:
+        return digest.hexdigest()
+    if replica.context_root is None or not replica.context_root.is_absolute() or (
+        os.name == "nt" and str(replica.context_root).startswith("\\\\")
+    ):
+        raise ProviderError("Hermes context root must be an absolute regular directory.")
+    handle = _open_context_root(replica.context_root)
+    try:
+        for logical in sorted(files):
+            content = _read_context_bytes(
+                replica.context_root,
+                PurePosixPath(logical),
+                _MAX_FILE_BYTES,
+                handle,
+            )
+            digest.update(logical.encode("utf-8"))
+            digest.update(_content_digest(logical, content).encode("ascii"))
+    finally:
+        _close_context_root(handle)
     return digest.hexdigest()
 
 

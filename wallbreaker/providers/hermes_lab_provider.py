@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from ..agent.messages import Message, StopEvent, StreamEvent, TextBlock, TextDelta, UsageEvent
-from ..hermes_lab import CleanupReceipt, HermesLabReplica
+from ..hermes_lab import CleanupReceipt, HermesLabEvidence, HermesLabReplica, HermesLabResult
 from .base import DEFAULT_TIMEOUT, Provider, ProviderError
 
 
@@ -16,6 +16,7 @@ class HermesLabProvider(Provider):
         self.last_completion_empty = False
         self.last_cleanup: CleanupReceipt | None = None
         self.last_replica_changed = False
+        self.last_evidence: HermesLabEvidence | None = None
         self._replicas: set[HermesLabReplica] = set()
 
     def _validate_request(
@@ -46,6 +47,32 @@ class HermesLabProvider(Provider):
             raise ProviderError("Hermes laboratory targets accept plain text only.")
         return message.content[0].text
 
+    async def _execute(
+        self,
+        prompt: str,
+        max_tokens: int,
+        *,
+        allowed_state_paths: frozenset[str] = frozenset(),
+        observe_tool_attempts: bool = False,
+    ) -> HermesLabResult:
+        replica = HermesLabReplica(self.endpoint, self.timeout)
+        self._replicas.add(replica)
+        try:
+            result = await replica.execute(
+                prompt,
+                max_tokens,
+                allowed_state_paths=allowed_state_paths,
+                observe_tool_attempts=observe_tool_attempts,
+            )
+        finally:
+            self._replicas.discard(replica)
+            self.last_cleanup = replica.cleanup_receipt
+        self.last_replica_changed = result.replica_changed
+        self.last_evidence = result.evidence
+        self.last_stop_reason = "end_turn"
+        self.last_completion_empty = not result.text
+        return result
+
     async def _run(
         self,
         messages: list[Message],
@@ -55,17 +82,22 @@ class HermesLabProvider(Provider):
         temperature: float | None,
     ):
         prompt = self._validate_request(messages, tools, system, max_tokens, temperature)
-        replica = HermesLabReplica(self.endpoint, self.timeout)
-        self._replicas.add(replica)
-        try:
-            result = await replica.execute(prompt, max_tokens)
-        finally:
-            self._replicas.discard(replica)
-            self.last_cleanup = replica.cleanup_receipt
-        self.last_replica_changed = result.replica_changed
-        self.last_stop_reason = "end_turn"
-        self.last_completion_empty = not result.text
-        return result
+        return await self._execute(prompt, max_tokens)
+
+    async def fire(
+        self,
+        messages: list[Message],
+        *,
+        max_tokens: int = 1024,
+        allowed_state_paths: frozenset[str] = frozenset(),
+    ) -> HermesLabResult:
+        prompt = self._validate_request(messages, None, None, max_tokens, None)
+        return await self._execute(
+            prompt,
+            max_tokens,
+            allowed_state_paths=allowed_state_paths,
+            observe_tool_attempts=True,
+        )
 
     async def complete_with_reasoning(
         self,
