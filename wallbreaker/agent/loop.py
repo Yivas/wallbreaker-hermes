@@ -13,7 +13,6 @@ from .messages import (
     StopEvent,
     TextBlock,
     TextDelta,
-    ReasoningDelta,
     ToolResultBlock,
     ToolUseBlock,
     ToolUseEvent,
@@ -280,6 +279,7 @@ async def run_autonomous(
     max_tokens: int = 8192,
     feedback: Callable[[], list[str]] | None = None,
     before_model: Callable[[], Awaitable[None]] | None = None,
+    max_iters: int = 25,
 ) -> AutoResult:
     events = events or AgentEvents()
     idle_streak = 0
@@ -307,6 +307,7 @@ async def run_autonomous(
             history,
             system=system,
             events=round_events,
+            max_iters=max_iters,
             max_tokens=max_tokens,
             stop_tools=STOP_TOOLS,
             feedback=feedback,  # steering now lands mid-round, between model turns

@@ -18,6 +18,7 @@ from .config import Endpoint
 from .providers.base import ProviderError
 
 
+HERMES_BASELINE_RELEASE = "v2026.8.13"
 HERMES_BASELINE_SHA = "f80f453ae0679347e38abc917c7f94f717bf96c5"
 HERMES_BASELINE_VERSION = "0.20.1"
 HERMES_MANIFEST_SCHEMA = "wh-hermes-fixture/v1"
@@ -233,7 +234,7 @@ class HermesLabReplica:
 
     def prepare(self, max_tokens: int) -> None:
         self._validate_runtime()
-        manifest = self._load_manifest()
+        manifest, manifest_bytes = self._load_manifest_snapshot()
         self.root = Path(tempfile.mkdtemp(prefix="wallbreaker-hermes-lab-"))
         self._secure_root()
         self.home = self.root / "home"
@@ -254,6 +255,11 @@ class HermesLabReplica:
         self._write_runtime_files(max_tokens)
         self._copy_manifest_files(manifest["files"])
         self._source_snapshot = self._snapshot_sources()
+        expected_context = self.endpoint.hermes_context_fingerprint
+        if expected_context and _fingerprint_context_snapshot(
+            manifest_bytes, self._source_snapshot
+        ) != expected_context:
+            raise ProviderError("Hermes laboratory context changed after authorization.")
         self._runtime_snapshot = self._snapshot(
             self._runtime_files, limit=_MAX_RUNTIME_FILE_BYTES
         )
@@ -414,14 +420,17 @@ class HermesLabReplica:
             "print(json.dumps({'version':importlib.metadata.version('hermes-agent'),"
             "'origins':origins}))"
         )
-        completed = subprocess.run(
-            [str(python), "-I", "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            env=self._identity_env(),
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                [str(python), "-I", "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=self._identity_env(),
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ProviderError("Hermes Python identity could not be verified.") from exc
         try:
             identity = json.loads(completed.stdout)
             origins = {
@@ -452,23 +461,29 @@ class HermesLabReplica:
         self._runtime_files = {"python": python, **origins}
 
     def _git(self, *args: str) -> str:
-        completed = subprocess.run(
-            ["git", "-C", str(self.runtime), *args],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                ["git", "-C", str(self.runtime), *args],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ProviderError("Hermes runtime Git identity could not be verified.") from exc
         if completed.returncode != 0:
             raise ProviderError("Hermes runtime Git identity could not be verified.")
         return completed.stdout.strip()
 
     def _load_manifest(self) -> dict:
-        raw = _read_regular_utf8(self.manifest_path, _MAX_FILE_BYTES)
+        return self._load_manifest_snapshot()[0]
+
+    def _load_manifest_snapshot(self) -> tuple[dict, bytes]:
+        raw = _read_regular_bytes(self.manifest_path, _MAX_FILE_BYTES)
         try:
-            manifest = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise ProviderError("Hermes laboratory manifest is not valid JSON.") from exc
+            manifest = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ProviderError("Hermes laboratory manifest is not valid UTF-8 JSON.") from exc
         expected_keys = {"schema", "mode", "provider", "model", "files", "expected_tool_count"}
         if not isinstance(manifest, dict) or set(manifest) != expected_keys:
             raise ProviderError("Hermes laboratory manifest has an unsupported shape.")
@@ -491,7 +506,7 @@ class HermesLabReplica:
             raise ProviderError("Clean Hermes laboratory manifests cannot copy files.")
         if manifest["mode"] == "selected" and (not files or self.context_root is None):
             raise ProviderError("Selected Hermes laboratory manifests need files and a context root.")
-        return manifest
+        return manifest, raw
 
     def _write_runtime_files(self, max_tokens: int) -> None:
         assert self.home is not None
@@ -858,17 +873,29 @@ def _fingerprint_attestation(data: dict) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def validate_hermes_runtime(endpoint: Endpoint) -> None:
+    HermesLabReplica(endpoint, endpoint.timeout or 120)._validate_runtime()
+
+
+def _fingerprint_context_snapshot(manifest_bytes: bytes, snapshot: dict[str, str]) -> str:
+    digest = hashlib.sha256(manifest_bytes)
+    for logical, value in sorted(snapshot.items()):
+        digest.update(logical.encode("utf-8"))
+        digest.update(value.encode("ascii"))
+    return digest.hexdigest()
+
+
 def fingerprint_manifest_context(endpoint: Endpoint) -> str:
     replica = HermesLabReplica(endpoint, endpoint.timeout or 120)
-    manifest = replica._load_manifest()
-    digest = hashlib.sha256(_read_regular_bytes(replica.manifest_path, _MAX_FILE_BYTES))
+    manifest, manifest_bytes = replica._load_manifest_snapshot()
     files = manifest["files"]
     if not files:
-        return digest.hexdigest()
+        return _fingerprint_context_snapshot(manifest_bytes, {})
     if replica.context_root is None or not replica.context_root.is_absolute() or (
         os.name == "nt" and str(replica.context_root).startswith("\\\\")
     ):
         raise ProviderError("Hermes context root must be an absolute regular directory.")
+    snapshot = {}
     handle = _open_context_root(replica.context_root)
     try:
         for logical in sorted(files):
@@ -878,11 +905,10 @@ def fingerprint_manifest_context(endpoint: Endpoint) -> str:
                 _MAX_FILE_BYTES,
                 handle,
             )
-            digest.update(logical.encode("utf-8"))
-            digest.update(_content_digest(logical, content).encode("ascii"))
+            snapshot[logical] = _content_digest(logical, content)
     finally:
         _close_context_root(handle)
-    return digest.hexdigest()
+    return _fingerprint_context_snapshot(manifest_bytes, snapshot)
 
 
 def _open_context_root(root: Path) -> int | tuple[int, ...]:

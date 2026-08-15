@@ -124,8 +124,8 @@ memory and on the active terminal only; capture anything needed before ending th
 ## Programmatic Campaigns
 
 `wallbreaker.hermes_campaign` provides `load_suite`, `run_campaign`, `resume_campaign`, and
-`apply_reviews`. This API has no CLI or UI yet. A suite uses the closed
-`wallbreaker.hermes-campaign-suite/v1` schema:
+`apply_reviews`. The `wallbreaker hermes` CLI uses this API without adding another runner or
+persistence layer. A suite uses the closed `wallbreaker.hermes-campaign-suite/v1` schema:
 
 ```yaml
 schema: wallbreaker.hermes-campaign-suite/v1
@@ -162,3 +162,76 @@ failed attempts with a new attempt on a fresh replica. It never continues an int
 `apply_reviews` accepts only `pass` or `finding` for attempts marked `review_required` and
 recalculates aggregates. Discordant repetitions require review and do not receive a confidence
 bound until resolved.
+
+## Operator CLI
+
+Plan a campaign before any provider or replica is created:
+
+```text
+wallbreaker hermes run SUITE --config CONFIG --output RUN --dry-run
+```
+
+The command loads Wallbreaker's normal environment, validates the suite, configuration,
+credentials, fixed Hermes runtime, selected context, limits, output, and any resume report, and
+runs local Git and Python identity checks. It creates no provider, network request, temporary
+replica, or campaign report. It emits deterministic NDJSON using
+`wallbreaker.hermes-cli-event/v1`. The `plan.validated` event contains hash-only identities,
+limits, maximum known network requests, maximum Hermes processes, and a confirmation token.
+
+After the operator authorizes that exact plan, repeat the command with the same arguments and
+limits:
+
+```text
+wallbreaker hermes run SUITE --config CONFIG --output RUN \
+  --authorized --confirm sha256:PLAN_TOKEN
+```
+
+Changing the suite, effective configuration, limits, output path, or resume mode changes the
+token. Use `--resume` only after a new dry run. The initial limits are 1-10 repetitions, 1-50
+attacker rounds, 1-20 target fires per repetition, 1-131072 attacker tokens, 1-8192 target tokens,
+a timeout above zero and no more than 600 seconds, and at most 1000 known network requests.
+
+List pending review IDs without changing the report:
+
+```text
+wallbreaker hermes review RUN
+```
+
+Apply decisions supplied by the operator:
+
+```text
+wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
+```
+
+Verify the closed report offline:
+
+```text
+wallbreaker hermes verify RUN
+```
+
+Verification requires a complete campaign, no pending review, attestation fingerprints, verified
+process cleanup, removed replica roots, unchanged source context, and applicable confidence for
+each split. A resolved security finding is valid campaign evidence and does not make verification
+fail.
+
+Exit codes are `0` for a completed operation, `1` for invalid data or an operational failure,
+`2` when review or strict evidence remains pending, `3` when authorization or confirmation is
+missing, and `130` for operator cancellation. Argparse returns `2` for command syntax errors before
+an operator action starts. Cancellation checkpoints the report; resumption creates a new attempt
+and replica.
+
+## Hermes Agent operator skill
+
+The public skill source is
+`integrations/hermes/skills/wallbreaker-hermes/SKILL.md`. Install it into the operator-side Hermes
+Agent, not the clean checkout used as the target:
+
+```text
+hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes
+```
+
+The skill is fixed to Hermes Agent release `v2026.8.13`, package `0.20.1`, and commit
+`f80f453ae0679347e38abc917c7f94f717bf96c5`. It uses `clarify` for authorization, limits,
+confirmation, and review decisions, then invokes the CLI through a normal shell tool. It does not
+modify Hermes core, inspect configuration contents, or use `execute_code` for campaign commands.
+Fictional fixtures are under `integrations/hermes/examples/`.

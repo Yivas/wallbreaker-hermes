@@ -33,9 +33,10 @@ validation work as documented below. The unreleased Hermes laboratory adapter ta
 Hermes Agent `v2026.8.13` revision. It supports one text turn with a clean home or selected SOUL,
 memory, and working-directory rules. It rejects tools, MCP, custom prompt layers, profiles,
 prefill, continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md).
-The programmatic campaign API loads versioned YAML suites, runs isolated repetitions through the
-existing autonomous loop, and writes hash-only JSON evidence for manual review. CLI and UI support
-remain unreleased.
+The campaign API and `wallbreaker hermes run|review|verify` CLI load versioned YAML suites, run
+isolated repetitions through the existing autonomous loop, and write hash-only JSON evidence for
+manual review. The optional operator skill lives under `integrations/hermes/`; UI support remains
+unreleased.
 
 The Python package and commands remain `wallbreaker` and `wb` for upstream compatibility.
 
@@ -110,7 +111,8 @@ and a `timeout` override.
 
 Hermes Agent targets use `protocol = "hermes-lab"` with a dedicated checkout, Python
 interpreter, provider credential environment variable, and closed manifest. They remain opt-in
-and do not change any standard target defaults. See [Hermes Native Laboratory](docs/HERMES_LAB.md).
+and do not change any standard target defaults. See [Hermes Native Laboratory](docs/HERMES_LAB.md)
+and the [operator skill](integrations/hermes/README.md).
 
 ```toml
 default_profile = "glm"

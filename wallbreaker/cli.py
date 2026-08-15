@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import subprocess
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -168,7 +170,7 @@ def _add_endpoint_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--api-key", help="API key literal (prefer --api-key-env)")
 
 
-SUBCOMMANDS = ("lib", "parsel", "eni", "transform", "findings", "report", "export", "check", "regrade", "baseline", "dashboard")
+SUBCOMMANDS = ("lib", "parsel", "eni", "transform", "findings", "report", "export", "check", "regrade", "baseline", "dashboard", "hermes")
 
 
 def build_main_parser() -> argparse.ArgumentParser:
@@ -238,6 +240,9 @@ def build_sub_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wallbreaker")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    from .hermes_cli import add_hermes_parser
+
+    add_hermes_parser(sub)
     lib = sub.add_parser("lib", help="Manage the L1B3RT4S jailbreak library")
     lib.add_argument("lib_action", choices=["update", "list", "path"])
 
@@ -399,12 +404,16 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    load_dotenv()
     raw = list(sys.argv[1:] if argv is None else argv)
     first_pos = next((a for a in raw if not a.startswith("-")), None)
 
     if first_pos in SUBCOMMANDS:
         args = build_sub_parser().parse_args(raw)
+        if args.command == "hermes":
+            from .hermes_cli import run_hermes_cli
+
+            return run_hermes_cli(args)
+        load_dotenv()
         if args.command == "transform":
             from .tools.parseltongue import run_chain_cli
 
@@ -549,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_lib_cli(args)
 
     args = build_main_parser().parse_args(raw)
+    load_dotenv()
     try:
         config = load_config(args.config)
         apply_target_overrides(config, args)

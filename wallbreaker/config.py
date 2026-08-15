@@ -95,6 +95,7 @@ class Endpoint:
     hermes_provider: str = ""
     hermes_manifest: str = ""
     hermes_context_root: str = ""
+    hermes_context_fingerprint: str = ""
 
     def resolved_key(self) -> str:
         if self.api_key:

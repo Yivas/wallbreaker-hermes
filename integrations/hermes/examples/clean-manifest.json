@@ -1,0 +1,8 @@
+{
+  "schema": "wh-hermes-fixture/v1",
+  "mode": "clean",
+  "provider": "fixture-provider",
+  "model": "fixture/model",
+  "files": [],
+  "expected_tool_count": 0
+}

@@ -447,6 +447,21 @@ async def test_resume_replaces_interrupted_attempt_instead_of_resuming_it(
     report = _initial_report(suite, fingerprint, settings)
     first = report["repetitions"][0]
     first["attempts"][-1]["status"] = interrupted_status
+    if interrupted_status == AttemptStatus.FAILED.value:
+        first["attempts"][-1]["assessment"] = Assessment.MANUAL_REQUIRED.value
+        first["attempts"][-1]["error_type"] = "SyntheticError"
+        first["attempts"][-1]["invocations"] = [
+            {
+                "status": "success",
+                "cleanup": {
+                    "outcome": "success",
+                    "root_removed": True,
+                    "process_reaped": True,
+                    "source_unchanged": True,
+                },
+            }
+        ]
+    _refresh(report)
     output = tmp_path / "campaign.json"
     output.write_text(json.dumps(report), encoding="utf-8")
 
