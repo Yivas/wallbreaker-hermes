@@ -8,7 +8,7 @@ explicit permission to evaluate.
 
 - Python 3.11 or newer
 - Git
-- Node.js 22.12 or newer and npm, if you want the browser interface
+- Node.js 22.14 or newer and npm, if you want the browser interface
 - Credentials for the model providers you intend to use, unless you use a supported
   keyless local CLI provider
 

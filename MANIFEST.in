@@ -14,5 +14,6 @@ recursive-include wallbreaker/dashboard/web/src *
 include wallbreaker/dashboard/web/index.html
 include wallbreaker/dashboard/web/package.json
 include wallbreaker/dashboard/web/package-lock.json
+include wallbreaker/dashboard/web/bun.lock
 include wallbreaker/dashboard/web/tsconfig*.json
 include wallbreaker/dashboard/web/vite.config.ts

@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 DISTRIBUTION = "wallbreaker-hermes"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 WHEEL_PREFIX = f"wallbreaker_hermes-{VERSION}-"
 SDIST_NAME = f"wallbreaker_hermes-{VERSION}.tar.gz"
 REQUIRED_WHEEL = {
@@ -111,6 +111,8 @@ def check_sdist(path: Path) -> None:
             root + "integrations/hermes/skills/wallbreaker-hermes/SKILL.md",
             root + "wallbreaker/dashboard/web/dist/index.html",
             root + "wallbreaker/dashboard/web/package.json",
+            root + "wallbreaker/dashboard/web/package-lock.json",
+            root + "wallbreaker/dashboard/web/bun.lock",
             root + "wallbreaker/tui/app.tcss",
         }
         missing = required - set(names)

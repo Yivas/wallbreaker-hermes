@@ -67,7 +67,7 @@ afterEach(() => {
   restoreScrollMetrics();
   window.requestAnimationFrame = originalRaf;
   window.matchMedia = originalMatchMedia;
-  vi.restoreAllMocks();
+  vi.clearAllMocks();
   cleanup();
 });
 

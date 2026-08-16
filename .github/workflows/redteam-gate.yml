@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.12"
+          node-version: "22.14"
           cache: npm
           cache-dependency-path: wallbreaker/dashboard/web/package-lock.json
 
@@ -69,7 +69,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.12"
+          node-version: "22.14"
           cache: npm
           cache-dependency-path: wallbreaker/dashboard/web/package-lock.json
 
@@ -95,7 +95,7 @@ jobs:
           python -m venv /tmp/wallbreaker-release
           wheel=$(ls dist/*.whl)
           /tmp/wallbreaker-release/bin/pip install "$wheel[dashboard]"
-          /tmp/wallbreaker-release/bin/python -c "import wallbreaker; assert wallbreaker.__version__ == '0.2.0'"
+          /tmp/wallbreaker-release/bin/python -c "import wallbreaker; assert wallbreaker.__version__ == '0.2.1'"
           /tmp/wallbreaker-release/bin/python -c "from pathlib import Path; import wallbreaker.dashboard.server as server; assert (Path(server.__file__).parent / 'web' / 'dist' / 'index.html').is_file()"
           /tmp/wallbreaker-release/bin/wallbreaker --help
           /tmp/wallbreaker-release/bin/wb --help

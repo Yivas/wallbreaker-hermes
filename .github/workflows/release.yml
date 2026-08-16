@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.12"
+          node-version: "22.14"
           cache: npm
           cache-dependency-path: wallbreaker/dashboard/web/package-lock.json
 
@@ -91,14 +91,21 @@ jobs:
           Path("release-notes.md").write_text(notes.strip() + "\n", encoding="utf-8")
           PY
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME" dist/*
-          --verify-tag
-          --title "Wallbreaker Hermes $GITHUB_REF_NAME"
-          --notes-file release-notes.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "Wallbreaker Hermes $GITHUB_REF_NAME" \
+              --notes-file release-notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --title "Wallbreaker Hermes $GITHUB_REF_NAME" \
+              --notes-file release-notes.md
+          fi
 
   pypi:
     needs: github-release
@@ -117,3 +124,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: dist/
+          skip-existing: true
