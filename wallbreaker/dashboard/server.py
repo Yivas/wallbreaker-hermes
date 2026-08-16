@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .. import report as report_mod
+from .. import __version__, report as report_mod
 from ..agent.messages import user
 from ..presets import list_presets
 from ..providers.factory import build_provider
@@ -863,7 +863,7 @@ def create_app(
             configure_request_gate(gate["concurrency"], gate["request_delay_ms"])
         except Exception as exc:
             _log.warning("dashboard init degraded — %s: %s", type(exc).__name__, exc)
-    app = FastAPI(title="Wallbreaker", version="0.1.0")
+    app = FastAPI(title="Wallbreaker", version=__version__)
     from ..executions import ExecutionManager, TERMINAL_STATES
     from ..history_index import HistoryIndex
 
@@ -899,7 +899,7 @@ def create_app(
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "name": "wallbreaker", "version": "0.1.0"}
+        return {"ok": True, "name": "wallbreaker", "version": __version__}
 
     @app.get("/api/session")
     def session_bootstrap(origin: str | None = Header(default=None)):

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from wallbreaker.hermes_campaign import (
     SUITE_SCHEMA,
     _assess_behavior,
     _assess_state,
+    _combine_assessments,
     _config_fingerprint,
     _campaign_output_lock,
     _evaluate_fire,
@@ -36,6 +38,14 @@ from wallbreaker.hermes_lab import (
 )
 from wallbreaker.tools.registry import ToolContext, ToolRegistry
 from wallbreaker.session import RunLog, inference_logging
+
+
+@pytest.fixture(autouse=True)
+def _evidence_key(monkeypatch):
+    monkeypatch.setenv(
+        "WALLBREAKER_HERMES_EVIDENCE_KEY",
+        "fixture-evidence-key-with-at-least-thirty-two-bytes",
+    )
 
 
 def _suite(path: Path):
@@ -166,6 +176,18 @@ def test_behavior_assessment_covers_expectations_and_disagreement(
     assert _assess_behavior(expected, judge, heuristic) == assessment
 
 
+@pytest.mark.parametrize(
+    "values,expected",
+    [
+        ([Assessment.PASS, Assessment.FINDING], Assessment.FINDING),
+        ([Assessment.PASS, Assessment.MANUAL_REQUIRED], Assessment.MANUAL_REQUIRED),
+        ([Assessment.FINDING, Assessment.MANUAL_REQUIRED], Assessment.MANUAL_REQUIRED),
+    ],
+)
+def test_manual_assessment_always_requires_review(values, expected):
+    assert _combine_assessments(values) == expected
+
+
 def test_state_assessment_covers_soul_memory_rules_and_undeclared_changes(tmp_path):
     suite = _suite(tmp_path / "suite.yaml")
     unchanged, declared, manual = suite.cases
@@ -193,12 +215,51 @@ async def test_judge_failure_is_explicit_and_requires_review(tmp_path, monkeypat
         case,
         "Synthetic prompt",
         "Here is " + "synthetic content " * 30,
-        _result("Synthetic response"),
+        _result("Synthetic response", tool_attempts=1),
         config.judge,
+        fingerprint_salt="a" * 64,
     )
     assert fire["behavior"]["judge_status"] == "failed"
     assert fire["behavior"]["judge_error_type"] == "RuntimeError"
     assert fire["behavior"]["assessment"] == Assessment.MANUAL_REQUIRED.value
+    assert fire["tools"]["assessment"] == Assessment.FINDING.value
+    assert fire["assessment"] == Assessment.MANUAL_REQUIRED.value
+
+
+@pytest.mark.asyncio
+async def test_private_fire_fingerprints_are_keyed_and_scoped(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    case = _suite(tmp_path / "suite.yaml").cases[0]
+    response = "Here is " + "synthetic content " * 30
+
+    async def fake_judge(*args, **kwargs):
+        return {"label": "COMPLIED", "score": 10, "reason": "fixture"}
+
+    monkeypatch.setattr(campaign, "build_provider", lambda endpoint: object())
+    monkeypatch.setattr(campaign, "judge_reply", fake_judge)
+    first = await _evaluate_fire(
+        case,
+        "Synthetic prompt",
+        response,
+        _result(response),
+        object(),
+        fingerprint_salt="a" * 64,
+    )
+    second = await _evaluate_fire(
+        case,
+        "Synthetic prompt",
+        response,
+        _result(response),
+        object(),
+        fingerprint_salt="b" * 64,
+    )
+    assert first["prompt_fingerprint"] != hashlib.sha256(
+        b"Synthetic prompt"
+    ).hexdigest()
+    assert first["response_fingerprint"] != hashlib.sha256(response.encode()).hexdigest()
+    assert first["prompt_fingerprint"] != second["prompt_fingerprint"]
+    assert first["response_fingerprint"] != second["response_fingerprint"]
 
 
 @pytest.mark.asyncio

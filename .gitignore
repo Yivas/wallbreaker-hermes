@@ -63,7 +63,11 @@ rth_tasks/
 
 # dashboard frontend build
 node_modules/
-wallbreaker/dashboard/web/dist/
+wallbreaker/dashboard/web/dist/*
+!wallbreaker/dashboard/web/dist/
+!wallbreaker/dashboard/web/dist/index.html
+!wallbreaker/dashboard/web/dist/assets/
+!wallbreaker/dashboard/web/dist/assets/**
 *.tsbuildinfo
 wallbreaker/dashboard/web/vite.config.js
 wallbreaker/dashboard/web/vite.config.d.ts

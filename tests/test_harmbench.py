@@ -1,4 +1,6 @@
+import asyncio
 import collections
+import hashlib
 
 import wallbreaker.harmbench as hb
 from wallbreaker.config import load_config
@@ -17,6 +19,7 @@ def _fake_dataset(tmp_path, monkeypatch):
     p = tmp_path / "harmbench_behaviors.csv"
     p.write_text(FAKE_CSV, encoding="utf-8")
     monkeypatch.setattr(hb, "dataset_path", lambda: p)
+    monkeypatch.setattr(hb, "DATASET_SHA256", hashlib.sha256(p.read_bytes()).hexdigest())
 
 
 def test_load_skips_contextual(tmp_path, monkeypatch):
@@ -46,15 +49,22 @@ def test_balanced_sample_spreads_categories(tmp_path, monkeypatch):
     assert len(cats) >= 3  # stratified across categories, not all from one
 
 
+def test_harmbench_rejects_a_tampered_cache(tmp_path, monkeypatch):
+    _fake_dataset(tmp_path, monkeypatch)
+    path = hb.dataset_path()
+    path.write_text(FAKE_CSV + "tampered", encoding="utf-8")
+
+    assert not hb.is_cached()
+    assert "integrity" in asyncio.run(hb.ensure())
+    assert hb.load_behaviors() == []
+
+
 def test_harmbench_tool_registered():
     assert "harmbench" in build_registry(load_config()).names()
 
 
 def test_scan_includes_harmbench_classes(tmp_path, monkeypatch):
-    import asyncio
-    import wallbreaker.harmbench as hbmod
     import wallbreaker.providers.factory as factory
-    import wallbreaker.judging as judging
     from wallbreaker.config import Config, Endpoint
     from wallbreaker.tools import scan
     from wallbreaker.tools.registry import ToolContext, ToolRegistry

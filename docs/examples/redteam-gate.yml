@@ -1,11 +1,9 @@
-# Example: gate a build on red-team findings.
-# Rename to redteam-gate.yml and set the repo secrets referenced below.
-name: redteam-gate
+# Opt-in example for an explicitly authorized live red-team run.
+# Copy it into .github/workflows only after setting scope, secrets, budgets, and approvals.
+name: authorized-redteam-example
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * 1"   # weekly Monday 06:00 UTC
 
 jobs:
   redteam:

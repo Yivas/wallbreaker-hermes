@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import io
 import random
 from pathlib import Path
 
 import httpx
+
+from .._fsutil import atomic_write_bytes
 
 
 def library_dir() -> Path:
@@ -17,15 +20,28 @@ def cache_path(filename: str) -> Path:
     return library_dir() / filename
 
 
-def download(url: str, path: Path, label: str = "dataset") -> str | None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _matches_digest(path: Path, expected_sha256: str) -> bool:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest() == expected_sha256
+    except OSError:
+        return False
+
+
+def download(
+    url: str,
+    path: Path,
+    expected_sha256: str,
+    label: str = "dataset",
+) -> str | None:
     try:
         resp = httpx.get(url, timeout=30, follow_redirects=True)
         if resp.status_code != 200:
             return f"{label} download failed: HTTP {resp.status_code}"
-        path.write_text(resp.text, encoding="utf-8")
+        if hashlib.sha256(resp.content).hexdigest() != expected_sha256:
+            return f"{label} download failed: integrity mismatch"
+        atomic_write_bytes(path, resp.content)
         return None
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, OSError) as exc:
         return f"{label} download failed: {exc}"
 
 
@@ -68,12 +84,13 @@ def stratified_sample(behaviors: list[dict], category=None, n: int = 8, seed: in
 class BaseLoader:
     name = ""
     url = ""
+    sha256 = ""
     cache_filename = ""
     benign = False
     extra_sources: tuple = ()
 
     def _sources(self):
-        yield (self.url, self.cache_filename, self.benign)
+        yield (self.url, self.cache_filename, self.benign, self.sha256)
         for src in self.extra_sources:
             yield src
 
@@ -81,34 +98,44 @@ class BaseLoader:
         return cache_path(self.cache_filename)
 
     def is_cached(self) -> bool:
-        return self.cache_path().is_file()
+        return all(
+            _matches_digest(cache_path(filename), expected_sha256)
+            for _url, filename, _benign, expected_sha256 in self._sources()
+        )
 
     def normalize(self, row: dict, idx: int, benign: bool) -> dict | None:
         raise NotImplementedError
 
     def _ensure_blocking(self) -> str | None:
-        primary_err = None
-        for pos, (url, filename, _benign) in enumerate(self._sources()):
+        for url, filename, _benign, expected_sha256 in self._sources():
             path = cache_path(filename)
-            if path.is_file():
+            if path.exists():
+                if not _matches_digest(path, expected_sha256):
+                    return f"{self.name} cache failed integrity verification"
                 continue
-            err = download(url, path, label=self.name)
-            if err and pos == 0:
-                primary_err = err
-        return primary_err
+            err = download(url, path, expected_sha256, label=self.name)
+            if err:
+                return err
+        return None
 
     async def ensure(self, offline: bool = False) -> str | None:
         if self.is_cached():
             return None
+        if any(
+            cache_path(filename).exists()
+            and not _matches_digest(cache_path(filename), expected_sha256)
+            for _url, filename, _benign, expected_sha256 in self._sources()
+        ):
+            return f"{self.name} cache failed integrity verification"
         if offline:
             return f"{self.name} not cached and offline."
         return await asyncio.to_thread(self._ensure_blocking)
 
     def load(self) -> list[dict]:
         rows: list[dict] = []
-        for url, filename, benign in self._sources():
+        for _url, filename, benign, expected_sha256 in self._sources():
             path = cache_path(filename)
-            if not path.is_file():
+            if not _matches_digest(path, expected_sha256):
                 continue
             text = path.read_text(encoding="utf-8")
             for norm in parse_csv(text, lambda r, i, b=benign: self.normalize(r, i, b)):

@@ -16,9 +16,9 @@ jobs:
         httpx-version: ["0.27.*", "0.28.*"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -41,9 +41,9 @@ jobs:
         working-directory: wallbreaker/dashboard/web
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.12"
           cache: npm
@@ -60,3 +60,47 @@ jobs:
 
       - name: Check component sizes
         run: npm run check:line-counts
+
+  artifacts:
+    needs: [test, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.12"
+          cache: npm
+          cache-dependency-path: wallbreaker/dashboard/web/package-lock.json
+
+      - name: Build dashboard
+        working-directory: wallbreaker/dashboard/web
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+
+      - name: Build and inspect distributions
+        run: |
+          python -m pip install -U pip build twine
+          python -m build
+          python -m twine check dist/*
+          python scripts/check_release_artifacts.py dist
+
+      - name: Install wheel in a clean environment
+        run: |
+          python -m venv /tmp/wallbreaker-release
+          wheel=$(ls dist/*.whl)
+          /tmp/wallbreaker-release/bin/pip install "$wheel[dashboard]"
+          /tmp/wallbreaker-release/bin/python -c "import wallbreaker; assert wallbreaker.__version__ == '0.2.0'"
+          /tmp/wallbreaker-release/bin/python -c "from pathlib import Path; import wallbreaker.dashboard.server as server; assert (Path(server.__file__).parent / 'web' / 'dist' / 'index.html').is_file()"
+          /tmp/wallbreaker-release/bin/wallbreaker --help
+          /tmp/wallbreaker-release/bin/wb --help
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wallbreaker-hermes-distributions
+          path: dist/*

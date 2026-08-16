@@ -17,6 +17,7 @@ from .hermes_campaign import (
     CampaignSettings,
     build_campaign_plan,
     campaign_verification_issues,
+    confirmation_fingerprint_salt,
     load_campaign_report,
     load_suite,
     resume_campaign,
@@ -183,6 +184,15 @@ def _run_command(args: argparse.Namespace, writer: EventWriter) -> int:
             {"status": "authorization_required", "exit_code": 3},
         )
         return 3
+    fingerprint_salt = (
+        None if args.dry_run else confirmation_fingerprint_salt(args.confirm)
+    )
+    if not args.dry_run and fingerprint_salt is None:
+        writer.emit(
+            "result",
+            {"status": "confirmation_mismatch", "exit_code": 3},
+        )
+        return 3
     load_dotenv()
     config = load_config(args.config)
     attacker = config.profile(args.profile)
@@ -195,6 +205,7 @@ def _run_command(args: argparse.Namespace, writer: EventWriter) -> int:
         settings,
         attacker,
         resume=args.resume,
+        fingerprint_salt=fingerprint_salt,
     )
     writer.emit("plan.validated", plan)
     if args.dry_run:

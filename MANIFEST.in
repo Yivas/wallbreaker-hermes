@@ -1,0 +1,18 @@
+include CHANGELOG.md
+include LICENSE
+include NOTICE
+include SECURITY.md
+include config.example.toml
+include library.lock.toml
+recursive-include docs *.json *.md *.png *.yml
+recursive-include integrations/hermes *
+recursive-include presets *.toml
+include scripts/check_release_artifacts.py
+include wallbreaker/tui/app.tcss
+recursive-include wallbreaker/dashboard/web/dist *
+recursive-include wallbreaker/dashboard/web/src *
+include wallbreaker/dashboard/web/index.html
+include wallbreaker/dashboard/web/package.json
+include wallbreaker/dashboard/web/package-lock.json
+include wallbreaker/dashboard/web/tsconfig*.json
+include wallbreaker/dashboard/web/vite.config.ts

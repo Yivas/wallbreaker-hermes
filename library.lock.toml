@@ -26,18 +26,58 @@ note = "Resolved from local library/ZetaLib clone."
 
 [corpus.P4RS3LT0NGV3]
 repo = "https://github.com/elder-plinius/P4RS3LT0NGV3"
-sha = "UNRESOLVED"
-fetched = "2026-07-23"
-note = "Online-only corpus; not present in this checkout. Run: wallbreaker corpus verify --update after wallbreaker lib update."
+sha = "a6cb7c9054800e106b63888d362601922477a614"
+fetched = "2026-08-16"
+note = "Remote HEAD measured with git ls-remote; runtime still requires a matching local checkout."
 
 [corpus.L1B3RT4S]
 repo = "https://github.com/elder-plinius/L1B3RT4S"
-sha = "UNRESOLVED"
-fetched = "2026-07-23"
-note = "Online-only corpus; not present in this checkout. Run: wallbreaker corpus verify --update after wallbreaker lib update."
+sha = "64960b783249d36f76a48a33103cc4b168332b9b"
+fetched = "2026-08-16"
+note = "Remote HEAD measured with git ls-remote; runtime still requires a matching local checkout."
 
 [corpus.ENI]
 repo = "https://github.com/elder-plinius/ENI"
 sha = "UNRESOLVED"
-fetched = "2026-07-23"
-note = "Online-only corpus; not present in this checkout. Run: wallbreaker corpus verify --update after wallbreaker lib update."
+fetched = "2026-08-16"
+note = "Repository returned not found on 2026-08-16; runtime refuses to load it."
+
+[dataset.HarmBench]
+repo = "https://github.com/centerforaisafety/HarmBench"
+revision = "8e1604d1171fe8a48d8febecd22f600e462bdcdd"
+path = "data/behavior_datasets/harmbench_behaviors_text_all.csv"
+sha256 = "8d81accedd38eaaf8b760618622bb888417d1fd0c86eba65c427a16f1cbb4afc"
+license = "MIT"
+
+[dataset.AdvBench]
+repo = "https://github.com/llm-attacks/llm-attacks"
+revision = "098262edf85f807224e70ecd87b9d83716bf6b73"
+path = "data/advbench/harmful_behaviors.csv"
+sha256 = "6cd1a5c63c07610d7eb67307772ee5606017ee950b5770ab288a2c487489d3e1"
+license = "MIT"
+
+[dataset.JailbreakBench_harmful]
+repo = "https://huggingface.co/datasets/JailbreakBench/JBB-Behaviors"
+revision = "886acc352a31533ffbcf4ef22c744658688086fc"
+path = "data/harmful-behaviors.csv"
+sha256 = "4a8ec6832056b631eb092dccc60d37a61c3d441268268888b3d006288afeffa1"
+license = "MIT"
+
+[dataset.JailbreakBench_benign]
+repo = "https://huggingface.co/datasets/JailbreakBench/JBB-Behaviors"
+revision = "886acc352a31533ffbcf4ef22c744658688086fc"
+path = "data/benign-behaviors.csv"
+sha256 = "3cda234d21a991fa309bbfea4b6d9dae31ccdf8e9d452424b6a983e4fdc33468"
+license = "MIT"
+
+[dataset.StrongREJECT]
+repo = "https://github.com/alexandrasouly/strongreject"
+revision = "f7cad6c17e624e21d8df2278e918ae1dddb4cb56"
+path = "strongreject_dataset/strongreject_dataset.csv"
+sha256 = "4dd70357e4ff8b5d0ba5ebafecab5d6dd5633ce8046e3dd1c8bd93e64de44381"
+license = "MIXED"
+
+[optional_source.system_prompts_leaks]
+repo = "https://github.com/asgeirtj/system_prompts_leaks"
+revision = "332f3e7ef5a5f317bf147c0838528fdaab423626"
+license = "CC0-1.0 upstream claim; underlying third-party prompt rights may differ"

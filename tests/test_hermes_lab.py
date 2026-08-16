@@ -89,9 +89,9 @@ def _write_attestation(replica: HermesLabReplica, mode: str) -> None:
                 "provider": replica.endpoint.hermes_provider,
                 "model": replica.endpoint.model,
                 "profile": "",
-                "roles": ["user"],
-                "message_sizes": [7],
-                "message_hashes": ["0" * 64],
+                "roles": ["system", "user"],
+                "message_sizes": [6, 7],
+                "message_hashes": ["0" * 64, "1" * 64],
                 "tool_count": 0,
                 "request_tool_count": 0,
                 "request_valid": True,
@@ -465,6 +465,20 @@ def test_child_environment_rejects_reserved_credential_name(tmp_path, monkeypatc
     asyncio.run(replica.close())
 
 
+def test_replica_seals_are_unlinkable(tmp_path, monkeypatch):
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    first = _replica(first_root, monkeypatch)
+    second = _replica(second_root, monkeypatch)
+    first.prepare(1024)
+    second.prepare(1024)
+    assert first._seal != second._seal
+    asyncio.run(first.close())
+    asyncio.run(second.close())
+
+
 def test_probe_source_compiles():
     compile(_PROBE_SOURCE, "wallbreaker-lab-probe", "exec")
 
@@ -499,20 +513,23 @@ def test_probe_rejects_missing_request_body(tmp_path, monkeypatch):
             request={"body": {}}, tool_count=0, request_messages=[]
         )
     assert exc.value.args == (87,)
-    assert json.loads(path.read_text(encoding="utf-8"))["request_tool_count"] == -1
+    assert json.loads(path.read_text(encoding="utf-8"))["request_tool_count"] == 0
 
-    message = {"role": "user", "content": "Synthetic prompt"}
+    messages = [
+        {"role": "system", "content": "Synthetic system"},
+        {"role": "user", "content": "Synthetic prompt"},
+    ]
     with pytest.raises(ProbeExit) as exc:
         namespace["_write_attestation"](
             request={
                 "body": {
-                    "messages": [message],
+                    "messages": messages,
                     "tools": [],
                     "functions": [{"name": "blocked"}],
                 }
             },
             tool_count=0,
-            request_messages=[message],
+            request_messages=messages,
         )
     assert exc.value.args == (87,)
     assert json.loads(path.read_text(encoding="utf-8"))["request_tool_count"] == 1
@@ -527,6 +544,31 @@ def test_attestation_rejects_invalid_message_shape(tmp_path, monkeypatch):
     data["roles"] = []
     data["message_sizes"] = []
     data["message_hashes"] = []
+    replica.preflight_path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ProviderError, match="attestation"):
+        replica._validate_attestation(replica.preflight_path, "preflight")
+    asyncio.run(replica.close())
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [
+        ["user"],
+        ["system", "developer", "user"],
+        ["system", "user", "assistant"],
+        ["system", "user", "tool"],
+        ["system", "user", "user"],
+    ],
+)
+def test_attestation_rejects_roles_outside_fixed_request(roles, tmp_path, monkeypatch):
+    replica = _replica(tmp_path, monkeypatch)
+    replica.prepare(1024)
+    _write_attestation(replica, "preflight")
+    assert replica.preflight_path is not None
+    data = json.loads(replica.preflight_path.read_text(encoding="utf-8"))
+    data["roles"] = roles
+    data["message_sizes"] = [1] * len(roles)
+    data["message_hashes"] = ["0" * 64] * len(roles)
     replica.preflight_path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(ProviderError, match="attestation"):
         replica._validate_attestation(replica.preflight_path, "preflight")
@@ -564,6 +606,58 @@ def test_execute_preflights_runs_and_cleans(tmp_path, monkeypatch):
     assert (result.input_tokens, result.output_tokens) == (12, 5)
     assert result.cleanup.root_removed is True
     assert not roots[-1].exists()
+
+
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_execute_rejects_known_credential_in_child_output(stream, tmp_path, monkeypatch):
+    replica = _replica(tmp_path, monkeypatch)
+
+    async def fake_run(mode, prompt):
+        _write_attestation(replica, mode)
+        if mode == "preflight":
+            return 86, b"", b""
+        assert replica.usage_path is not None
+        replica.usage_path.write_text("{}", encoding="utf-8")
+        stdout = b"fixture-key" if stream == "stdout" else b"Synthetic response"
+        stderr = b"fixture-key" if stream == "stderr" else b""
+        return 0, stdout, stderr
+
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    with pytest.raises(ProviderError, match="secret") as error:
+        asyncio.run(replica.execute("Synthetic prompt", 1024))
+    assert "fixture-key" not in str(error.value)
+
+
+def test_execute_rejects_known_credential_in_allowed_state(tmp_path, monkeypatch):
+    source = tmp_path / "context"
+    source.mkdir()
+    (source / "SOUL.md").write_text("Synthetic identity", encoding="utf-8")
+    replica = _replica(
+        tmp_path,
+        monkeypatch,
+        mode="selected",
+        files=["SOUL.md"],
+        context_root=source,
+    )
+
+    async def fake_run(mode, prompt):
+        _write_attestation(replica, mode)
+        if mode == "preflight":
+            return 86, b"", b""
+        assert replica.home is not None and replica.usage_path is not None
+        (replica.home / "SOUL.md").write_text("fixture-key", encoding="utf-8")
+        replica.usage_path.write_text("{}", encoding="utf-8")
+        return 0, b"Synthetic response", b""
+
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    with pytest.raises(ProviderError, match="secret"):
+        asyncio.run(
+            replica.execute(
+                "Synthetic prompt",
+                1024,
+                allowed_state_paths=frozenset({"SOUL.md"}),
+            )
+        )
 
 
 def test_tool_or_mcp_attestation_aborts_and_cleans(tmp_path, monkeypatch):
@@ -628,6 +722,32 @@ async def test_cancellation_cleans_replica(tmp_path, monkeypatch):
     assert replica.cleanup_receipt is not None
     assert replica.cleanup_receipt.outcome == "cancelled"
     assert root is not None and not root.exists()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_preserves_cancelled_error_when_cleanup_fails(tmp_path, monkeypatch):
+    replica = _replica(tmp_path, monkeypatch)
+    entered = asyncio.Event()
+
+    async def fake_run(mode, prompt):
+        _write_attestation(replica, mode)
+        if mode == "preflight":
+            return 86, b"", b""
+        entered.set()
+        await asyncio.Event().wait()
+
+    async def failed_close(outcome="error"):
+        replica.cleanup_receipt = CleanupReceipt(outcome, False, True, True)
+        raise ProviderError("Hermes laboratory cleanup could not be verified.")
+
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    monkeypatch.setattr(replica, "close", failed_close)
+    task = asyncio.create_task(replica.execute("Synthetic prompt", 1024))
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert replica.cleanup_receipt == CleanupReceipt("cancelled", False, True, True)
 
 
 def test_source_change_fails_closed(tmp_path, monkeypatch):
@@ -871,11 +991,28 @@ def test_probe_counts_blocked_tool_attempts(tmp_path, monkeypatch):
     namespace = {}
     exec(_PROBE_SOURCE, namespace)
     path = tmp_path / "tool-attempts.txt"
-    path.write_text("0\n", encoding="utf-8")
+    path.write_text("", encoding="utf-8")
     monkeypatch.setenv("WALLBREAKER_HERMES_TOOL_ATTEMPTS", str(path))
     assert namespace["_block_tool_call"]()["action"] == "block"
     assert namespace["_block_tool_call"]()["action"] == "block"
-    assert path.read_text(encoding="utf-8") == "2"
+    assert path.read_text(encoding="utf-8") == "1\n1\n"
+
+
+def test_preflight_tool_attempt_fails_before_run(tmp_path, monkeypatch):
+    replica = _replica(tmp_path, monkeypatch)
+    phases = []
+
+    async def fake_run(mode, prompt):
+        phases.append(mode)
+        _write_attestation(replica, mode)
+        assert replica.tool_attempts_path is not None
+        replica.tool_attempts_path.write_text("1\n", encoding="utf-8")
+        return 86, b"", b""
+
+    monkeypatch.setattr(replica, "_run_process", fake_run)
+    with pytest.raises(ProviderError, match="preflight.*tool"):
+        asyncio.run(replica.execute("Synthetic prompt", 1024))
+    assert phases == ["preflight"]
 
 
 def test_invalid_tool_attempt_evidence_fails_closed(tmp_path, monkeypatch):

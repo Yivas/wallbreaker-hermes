@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import stat
@@ -84,14 +85,22 @@ from pathlib import Path
 def _write_attestation(**kwargs):
     request = kwargs.get("request")
     body = request.get("body") if isinstance(request, dict) else None
-    body_valid = isinstance(body, dict) and isinstance(body.get("messages"), list)
-    request_tools = body.get("tools", []) if body_valid else None
-    request_functions = body.get("functions", []) if body_valid else None
+    body_messages = body.get("messages") if isinstance(body, dict) else None
+    body_roles = (
+        [str(message.get("role", "")) for message in body_messages]
+        if isinstance(body_messages, list)
+        and all(isinstance(message, dict) for message in body_messages)
+        else []
+    )
+    body_valid = body_roles == ["system", "user"]
+    request_tools = body.get("tools", []) if isinstance(body, dict) else None
+    request_functions = body.get("functions", []) if isinstance(body, dict) else None
     messages = kwargs.get("request_messages")
     messages_valid = (
         isinstance(messages, list)
-        and bool(messages)
         and all(isinstance(message, dict) for message in messages)
+        and [str(message.get("role", "")) for message in messages]
+        == ["system", "user"]
     )
     messages = messages if isinstance(messages, list) else []
     seal = os.environ.get("WALLBREAKER_HERMES_SEAL", "")
@@ -127,7 +136,7 @@ def _write_attestation(**kwargs):
         "message_hashes": hashes,
         "tool_count": tool_count,
         "request_tool_count": request_tool_count,
-        "request_valid": body_valid and messages_valid,
+        "request_valid": body_valid and messages_valid and body_roles == roles,
         "mcp_count": mcp_count,
         "endpoint_origin_hash": hashlib.sha256(
             (seal + str(kwargs.get("base_url", ""))).encode("utf-8")
@@ -142,8 +151,7 @@ def _write_attestation(**kwargs):
         os.fsync(handle.fileno())
     os.replace(temporary, path)
     valid = (
-        body_valid
-        and messages_valid
+        payload["request_valid"]
         and tool_count == 0
         and request_tool_count == 0
         and mcp_count == 0
@@ -156,16 +164,10 @@ def _write_attestation(**kwargs):
 
 def _block_tool_call(**kwargs):
     path = Path(os.environ["WALLBREAKER_HERMES_TOOL_ATTEMPTS"])
-    try:
-        count = int(path.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
-        count = 0
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    with open(temporary, "w", encoding="utf-8") as handle:
-        handle.write(str(count + 1))
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write("1\\n")
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(temporary, path)
     return {"action": "block", "message": "Hermes laboratory targets cannot call tools."}
 
 
@@ -229,6 +231,7 @@ class HermesLabReplica:
         self._source_snapshot: dict[str, str] = {}
         self._runtime_snapshot: dict[str, str] = {}
         self._replica_snapshot: dict[str, str] = {}
+        self._seal_nonce = b""
         self._seal = ""
         self.cleanup_receipt: CleanupReceipt | None = None
 
@@ -251,7 +254,7 @@ class HermesLabReplica:
         self.preflight_path = self.root / "preflight.json"
         self.run_attestation_path = self.root / "run-attestation.json"
         self.tool_attempts_path = self.root / "tool-attempts.txt"
-        _write_private_text(self.tool_attempts_path, "0\n")
+        _write_private_text(self.tool_attempts_path, "")
         self._write_runtime_files(max_tokens)
         self._copy_manifest_files(manifest["files"])
         self._source_snapshot = self._snapshot_sources()
@@ -269,6 +272,7 @@ class HermesLabReplica:
         }
         if self._source_snapshot != copied_snapshot:
             raise ProviderError("Hermes laboratory context changed while it was copied.")
+        self._seal_nonce = secrets.token_bytes(32)
         self._seal = self._current_seal()
 
     async def execute(
@@ -288,15 +292,22 @@ class HermesLabReplica:
         outcome = "error"
         try:
             self.prepare(max_tokens)
-            preflight_code, _, _ = await self._run_process("preflight", prompt)
+            preflight_code, preflight_stdout, preflight_stderr = await self._run_process(
+                "preflight", prompt
+            )
+            self._reject_known_secret(preflight_stdout, preflight_stderr)
             if preflight_code != _PREFLIGHT_EXIT:
                 raise ProviderError("Hermes laboratory preflight did not stop before inference.")
             self._validate_attestation(self.preflight_path, "preflight")
+            if self._read_tool_attempts():
+                raise ProviderError("Hermes laboratory preflight observed a blocked tool attempt.")
             if self._current_seal() != self._seal:
                 raise ProviderError("Hermes laboratory inputs changed after preflight.")
             if self._snapshot(self._replica_files()) != self._replica_snapshot:
                 raise ProviderError("Hermes laboratory replica changed during preflight.")
-            code, stdout, _ = await self._run_process("run", prompt)
+            self._reset_tool_attempts()
+            code, stdout, stderr = await self._run_process("run", prompt)
+            self._reject_known_secret(stdout, stderr)
             if code == _POLICY_EXIT:
                 raise ProviderError("Hermes laboratory request violated the zero-tools policy.")
             if code != 0:
@@ -308,6 +319,7 @@ class HermesLabReplica:
             ) != self._runtime_snapshot:
                 raise ProviderError("Hermes laboratory runtime changed during execution.")
             usage = self._read_usage()
+            self._reject_known_secret_in_files(self._replica_files().values())
             final_state = self._snapshot(self._replica_files())
             changed_paths = {
                 logical
@@ -349,6 +361,10 @@ class HermesLabReplica:
             )
         except asyncio.CancelledError:
             outcome = "cancelled"
+            try:
+                await asyncio.shield(self.close(outcome))
+            except ProviderError:
+                pass
             raise
         except HermesLabTimeout:
             outcome = "timeout"
@@ -606,7 +622,10 @@ class HermesLabReplica:
 
     def _current_seal(self) -> str:
         self._validate_runtime()
+        if len(self._seal_nonce) != 32:
+            raise ProviderError("Hermes laboratory seal nonce is missing.")
         digest = hashlib.sha256(HERMES_BASELINE_SHA.encode("ascii"))
+        digest.update(self._seal_nonce)
         digest.update(_read_regular_bytes(self.manifest_path, _MAX_FILE_BYTES))
         for logical, value in sorted(
             self._snapshot(self._runtime_files, limit=_MAX_RUNTIME_FILE_BYTES).items()
@@ -695,6 +714,8 @@ class HermesLabReplica:
         key = self.endpoint.resolved_key()
         if not key:
             raise ProviderError(f"Hermes laboratory credential is missing from {key_name}.")
+        if len(key.encode("utf-8")) < 8:
+            raise ProviderError("Hermes laboratory credentials must contain at least 8 bytes.")
         env[key_name] = key
         return env
 
@@ -781,8 +802,10 @@ class HermesLabReplica:
         if path is None:
             raise ProviderError("Hermes laboratory attestation path is missing.")
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            raw = _read_regular_bytes(path, _MAX_FILE_BYTES)
+            self._reject_known_secret(raw)
+            data = json.loads(raw.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ProviderError("Hermes laboratory attestation is missing or invalid.") from exc
         roles = data.get("roles")
         sizes = data.get("message_sizes")
@@ -792,8 +815,7 @@ class HermesLabReplica:
             and data.get("profile") == ""
             and isinstance(roles, list)
             and bool(roles)
-            and all(isinstance(role, str) and role for role in roles)
-            and "user" in roles
+            and roles == ["system", "user"]
             and isinstance(sizes, list)
             and len(sizes) == len(roles)
             and all(isinstance(size, int) and size >= 0 for size in sizes)
@@ -820,25 +842,57 @@ class HermesLabReplica:
             raise ProviderError("Hermes laboratory attestation failed.")
         return data
 
+    def _known_secret(self) -> bytes:
+        key = self.endpoint.resolved_key().encode("utf-8")
+        if len(key) < 8:
+            raise ProviderError("Hermes laboratory credentials must contain at least 8 bytes.")
+        return key
+
+    def _reject_known_secret(self, *payloads: bytes) -> None:
+        secret = self._known_secret()
+        if any(secret in payload for payload in payloads):
+            raise ProviderError("Hermes laboratory output contains a known secret.")
+
+    def _reject_known_secret_in_files(self, paths) -> None:
+        payloads = []
+        for path in paths:
+            if not path.exists():
+                continue
+            payloads.append(_read_regular_bytes(path, _MAX_FILE_BYTES))
+        self._reject_known_secret(*payloads)
+
     def _read_usage(self) -> tuple[int, int]:
-        if self.usage_path is None:
+        if self.usage_path is None or not self.usage_path.is_file():
             return 0, 0
         try:
-            data = json.loads(self.usage_path.read_text(encoding="utf-8"))
+            raw = _read_regular_bytes(self.usage_path, _MAX_FILE_BYTES)
+            self._reject_known_secret(raw)
+            data = json.loads(raw.decode("utf-8"))
             return int(data.get("input_tokens") or 0), int(data.get("output_tokens") or 0)
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        except (OSError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
             return 0, 0
 
     def _read_tool_attempts(self) -> int:
         if self.tool_attempts_path is None:
             raise ProviderError("Hermes laboratory tool-attempt evidence is missing.")
         try:
-            count = int(self.tool_attempts_path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError) as exc:
+            lines = _read_regular_bytes(
+                self.tool_attempts_path, _MAX_FILE_BYTES
+            ).decode("utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
             raise ProviderError("Hermes laboratory tool-attempt evidence is invalid.") from exc
-        if count < 0:
+        if any(line != "1" for line in lines):
             raise ProviderError("Hermes laboratory tool-attempt evidence is invalid.")
-        return count
+        return len(lines)
+
+    def _reset_tool_attempts(self) -> None:
+        if self.tool_attempts_path is None:
+            raise ProviderError("Hermes laboratory tool-attempt evidence is missing.")
+        temporary = self.tool_attempts_path.with_suffix(".tmp")
+        with open(temporary, "xb") as handle:
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, self.tool_attempts_path)
 
 
 def _is_within(path: Path, root: Path) -> bool:

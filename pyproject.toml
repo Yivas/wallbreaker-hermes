@@ -3,17 +3,17 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wallbreaker"
-version = "0.1.0"
-description = "Wallbreaker fork for LLM red-teaming and planned Hermes Agent integration"
+name = "wallbreaker-hermes"
+version = "0.2.0"
+description = "Wallbreaker fork with an opt-in Hermes Agent red-team laboratory"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "AGPL-3.0-or-later" }
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [{ name = "JailbrokenAI" }]
 maintainers = [{ name = "Yivas" }]
 keywords = ["llm", "red-team", "jailbreak", "security", "ai-safety", "hermes-agent"]
 classifiers = [
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Topic :: Security",
     "Environment :: Console",
@@ -35,6 +35,8 @@ dependencies = [
 Homepage = "https://github.com/Yivas/wallbreaker-hermes"
 Repository = "https://github.com/Yivas/wallbreaker-hermes"
 Upstream = "https://github.com/JailbrokenAI/wallbreaker"
+Changelog = "https://github.com/Yivas/wallbreaker-hermes/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Yivas/wallbreaker-hermes/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -58,8 +60,18 @@ wallbreaker = "wallbreaker.cli:main"
 wb = "wallbreaker.cli:main"
 p4rs3lt0ngv3-mcp = "p4rs3lt0ngv3_mcp.server:main"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 include = ["wallbreaker*", "p4rs3lt0ngv3_mcp*"]
+
+[tool.setuptools.package-data]
+wallbreaker = [
+    "tui/app.tcss",
+    "dashboard/web/dist/index.html",
+    "dashboard/web/dist/assets/*",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

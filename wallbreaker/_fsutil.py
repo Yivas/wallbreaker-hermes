@@ -11,6 +11,25 @@ import tempfile
 from pathlib import Path
 
 
+def atomic_write_bytes(path: str | Path, data: bytes) -> None:
+    """Write bytes atomically without newline or encoding changes."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".wb-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def atomic_write(path: str | Path, text: str) -> None:
     """Write ``text`` to ``path`` atomically: temp file + fsync + os.replace.
 

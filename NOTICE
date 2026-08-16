@@ -28,6 +28,16 @@ records the revisions accepted by the integrity gate. Entries marked
 `UNRESOLVED` are blocked from loading until an operator reviews and pins them.
 A revision pin verifies integrity; it does not grant redistribution rights.
 
+External benchmark data and system prompts
+------------------------------------------
+
+Optional loaders reference HarmBench, AdvBench, JailbreakBench, StrongREJECT, and
+`asgeirtj/system_prompts_leaks`. None of their rows or prompts are redistributed. Exact sources,
+measured revisions, file digests, license findings, and caveats are recorded in
+`docs/EXTERNAL_DATA.md` and `library.lock.toml`. StrongREJECT contains mixed-origin rows, and an
+upstream CC0 claim for leaked system prompts may not settle rights in the underlying third-party
+prompts. Operators must review provenance and permission before use or redistribution.
+
 Intended use
 ------------
 

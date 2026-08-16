@@ -1,8 +1,13 @@
 """Task Group 3 (Supply-Chain Corpus Pinning) focused tests — TG3.4 and TG3.5."""
 from __future__ import annotations
 
+import subprocess
+from types import SimpleNamespace
+
 import pytest
 
+from wallbreaker import cli
+from wallbreaker.tools import parsel_engine
 from wallbreaker.tools.parsel_engine import load_corpus_with_pin_check, verify_corpus_sha
 
 
@@ -38,6 +43,29 @@ def test_load_corpus_unresolved_fails(tmp_path):
         load_corpus_with_pin_check("TEST", lock_path=lock)
 
 
+def test_corpus_update_preserves_non_corpus_lock_sections(tmp_path, monkeypatch):
+    lock = tmp_path / "library.lock.toml"
+    lock.write_text(
+        '[corpus.TEST]\nrepo = "https://example.invalid/test"\nsha = "UNRESOLVED"\n'
+        '\n[dataset.fixture]\nrevision = "keep-me"\n',
+        encoding="utf-8",
+    )
+    resolved = "a" * 40
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout=f"{resolved}\tHEAD\n", stderr=""
+        ),
+    )
+    monkeypatch.setattr(parsel_engine, "local_corpus_sha", lambda path: resolved)
+
+    assert cli._run_corpus_verify(SimpleNamespace(lock=str(lock), update=True)) == 0
+    updated = lock.read_text(encoding="utf-8")
+    assert f'sha = "{resolved}"' in updated
+    assert '[dataset.fixture]\nrevision = "keep-me"' in updated
+
+
 def test_load_corpus_unknown_fails(tmp_path):
     lock = tmp_path / "library.lock.toml"
     lock.write_text('[corpus.OTHER]\nrepo = "x"\nsha = "abc"\nfetched = "2026-07-23"\n')
@@ -46,7 +74,6 @@ def test_load_corpus_unknown_fails(tmp_path):
 
 
 def test_load_corpus_measures_local_head_and_rejects_drift(tmp_path):
-    import subprocess
     repo = tmp_path / "corpus"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True)

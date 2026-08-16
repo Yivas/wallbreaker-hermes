@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import wallbreaker.hermes_campaign as campaign
+from wallbreaker import __version__
 from wallbreaker.agent.messages import StopEvent, ToolUseEvent
 from wallbreaker.hermes_campaign import (
     Assessment,
@@ -36,6 +37,14 @@ from wallbreaker.hermes_lab import (
 )
 from wallbreaker.providers.base import ProviderError
 from wallbreaker.tools.registry import ToolContext, ToolRegistry
+
+
+@pytest.fixture(autouse=True)
+def _evidence_key(monkeypatch):
+    monkeypatch.setenv(
+        "WALLBREAKER_HERMES_EVIDENCE_KEY",
+        "fixture-evidence-key-with-at-least-thirty-two-bytes",
+    )
 
 
 def _suite(path):
@@ -196,21 +205,76 @@ def test_plan_is_deterministic_and_binds_limits_output_and_resume(tmp_path, monk
     monkeypatch.setattr(campaign, "_require_endpoint_credentials", lambda *args: None)
     monkeypatch.setattr(campaign, "validate_hermes_runtime", lambda endpoint: None)
 
-    first = build_campaign_plan(suite, config, output, attacker_endpoint=attacker)
-    second = build_campaign_plan(suite, config, output, attacker_endpoint=attacker)
+    salt = "a" * 64
+    first = build_campaign_plan(
+        suite,
+        config,
+        output,
+        attacker_endpoint=attacker,
+        fingerprint_salt=salt,
+    )
+    second = build_campaign_plan(
+        suite,
+        config,
+        output,
+        attacker_endpoint=attacker,
+        fingerprint_salt=salt,
+    )
 
     assert first == second
+    assert first["schema"] == "wallbreaker.hermes-campaign-plan/v2"
+    assert first["versions"]["wallbreaker"] == __version__
+    assert first["fingerprint_salt"] == salt
     assert first["maximum_network_requests"] == 324
     assert first["maximum_hermes_processes"] == 216
-    assert first["confirmation"].startswith("sha256:")
+    assert first["confirmation"].startswith(f"hmac-sha256:{salt}:")
     changed = build_campaign_plan(
         suite,
         config,
         output,
         CampaignSettings(max_fires=11),
         attacker,
+        fingerprint_salt=salt,
     )
     assert changed["confirmation"] != first["confirmation"]
+
+
+def test_resume_plan_binds_validated_checkpoint(tmp_path, monkeypatch):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    settings = CampaignSettings(repetitions=1)
+    report = _complete_report(tmp_path)
+    output = tmp_path / "report.json"
+    output.write_text(json.dumps(report), encoding="utf-8")
+    monkeypatch.setattr(campaign, "_require_endpoint_credentials", lambda *args: None)
+    monkeypatch.setattr(campaign, "validate_hermes_runtime", lambda endpoint: None)
+
+    first = build_campaign_plan(
+        suite,
+        config,
+        output,
+        settings,
+        attacker,
+        resume=True,
+    )
+    attempt = report["repetitions"][0]["attempts"][-1]
+    attempt["review"] = Assessment.FINDING.value
+    attempt["assessment"] = Assessment.FINDING.value
+    _refresh(report)
+    output.write_text(json.dumps(report), encoding="utf-8")
+    second = build_campaign_plan(
+        suite,
+        config,
+        output,
+        settings,
+        attacker,
+        resume=True,
+    )
+
+    assert first["resume_checkpoint_fingerprint"] != second[
+        "resume_checkpoint_fingerprint"
+    ]
+    assert first["confirmation"] != second["confirmation"]
 
 
 def test_plan_rejects_missing_or_incompatible_hermes_before_provider(tmp_path, monkeypatch):
@@ -690,6 +754,11 @@ def test_report_validation_and_strict_cleanup_gate(tmp_path):
     with pytest.raises(CampaignError, match="invalid"):
         validate_campaign_report(injected)
 
+    wrong_version = copy.deepcopy(report)
+    wrong_version["versions"]["wallbreaker"] = "0.1.0"
+    with pytest.raises(CampaignError, match="invalid"):
+        validate_campaign_report(wrong_version)
+
 
 @pytest.mark.asyncio
 async def test_resume_rejects_reordered_suite_topology(tmp_path):
@@ -841,6 +910,29 @@ def test_open_target_invocation_prevents_strict_verification(tmp_path):
 
     validate_campaign_report(report)
     assert "target_cleanup_unverified" in campaign_verification_issues(report)
+
+
+def test_manual_review_cannot_clear_confirmed_finding(tmp_path):
+    report = _complete_report(tmp_path)
+    attempt = report["repetitions"][0]["attempts"][-1]
+    attempt["fires"][0]["state"]["changed_components"] = ["soul"]
+    attempt["fires"][0]["state"]["final_fingerprint"] = "9" * 64
+    attempt["fires"][0]["state"]["assessment"] = Assessment.FINDING.value
+    attempt["fires"][0]["behavior"]["judge_label"] = None
+    attempt["fires"][0]["behavior"]["judge_score"] = None
+    attempt["fires"][0]["behavior"]["judge_status"] = "failed"
+    attempt["fires"][0]["behavior"]["judge_error_type"] = "RuntimeError"
+    attempt["fires"][0]["behavior"]["assessment"] = Assessment.MANUAL_REQUIRED.value
+    attempt["fires"][0]["assessment"] = Assessment.MANUAL_REQUIRED.value
+    attempt["status"] = AttemptStatus.REVIEW_REQUIRED.value
+    attempt["assessment"] = Assessment.MANUAL_REQUIRED.value
+    attempt["automatic_assessment"] = Assessment.MANUAL_REQUIRED.value
+    _refresh(report)
+    path = tmp_path / "review.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+
+    with pytest.raises(CampaignError, match="confirmed finding"):
+        campaign.apply_reviews(path, {attempt["id"]: Assessment.PASS})
 
 
 def test_pending_review_is_structurally_valid_but_not_verified(tmp_path):

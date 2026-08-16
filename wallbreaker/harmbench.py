@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import random
 from pathlib import Path
 
 import httpx
 
+from ._fsutil import atomic_write_bytes
+
 DATASET_URL = (
-    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/main/"
+    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/"
+    "8e1604d1171fe8a48d8febecd22f600e462bdcdd/"
     "data/behavior_datasets/harmbench_behaviors_text_all.csv"
 )
+DATASET_SHA256 = "8d81accedd38eaaf8b760618622bb888417d1fd0c86eba65c427a16f1cbb4afc"
 
 
 def dataset_path() -> Path:
@@ -18,7 +23,10 @@ def dataset_path() -> Path:
 
 
 def is_cached() -> bool:
-    return dataset_path().is_file()
+    try:
+        return hashlib.sha256(dataset_path().read_bytes()).hexdigest() == DATASET_SHA256
+    except OSError:
+        return False
 
 
 def _download() -> str | None:
@@ -28,15 +36,19 @@ def _download() -> str | None:
         resp = httpx.get(DATASET_URL, timeout=30, follow_redirects=True)
         if resp.status_code != 200:
             return f"HarmBench download failed: HTTP {resp.status_code}"
-        path.write_text(resp.text, encoding="utf-8")
+        if hashlib.sha256(resp.content).hexdigest() != DATASET_SHA256:
+            return "HarmBench download failed: integrity mismatch"
+        atomic_write_bytes(path, resp.content)
         return None
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, OSError) as exc:
         return f"HarmBench download failed: {exc}"
 
 
 async def ensure(offline: bool = False) -> str | None:
     if is_cached():
         return None
+    if dataset_path().exists():
+        return "HarmBench cache failed integrity verification."
     if offline:
         return "HarmBench not cached and offline."
     return await asyncio.to_thread(_download)

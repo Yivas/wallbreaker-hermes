@@ -10,14 +10,21 @@ not modify Hermes core or the clean checkout used by `hermes-lab`.
 - Hermes Agent release: `v2026.8.13`
 - Python package: `0.20.1`
 - Git commit: `f80f453ae0679347e38abc917c7f94f717bf96c5`
-- Wallbreaker report: `wallbreaker.hermes-campaign-report/v1`
+- Wallbreaker report: `wallbreaker.hermes-campaign-report/v2`
 - Wallbreaker CLI events: `wallbreaker.hermes-cli-event/v1`
 
 Other Hermes Agent revisions are not supported by this integration.
 
 ## Install
 
-Install Wallbreaker from this repository first. Then install the public skill from its GitHub path:
+Install the full Wallbreaker Hermes application from PyPI:
+
+```text
+pip install wallbreaker-hermes
+```
+
+The import package remains `wallbreaker`, and the commands remain `wallbreaker` and `wb`. Install
+the operator skill separately from its public GitHub path:
 
 ```text
 hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes

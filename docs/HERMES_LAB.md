@@ -96,17 +96,19 @@ Each inference follows this sequence:
 1. Verify the fixed runtime, manifest, selected files, environment, and temporary-root permissions.
 2. Build a minimal Hermes home with no MCP configuration and only the Wallbreaker probe plugin.
 3. Start a preflight `hermes -z` process with the same prompt and configuration as the real run.
-4. Let Hermes build the effective request, then record roles, sizes, ephemeral hashes, provider,
-   model, and tool/MCP counts.
+4. Let Hermes build the effective request, require exactly one `system` message followed by one
+   `user` message, then record sizes, ephemeral seals, provider, model, and tool/MCP counts.
 5. Exit the preflight process from `pre_api_request`, before the provider call.
 6. Recheck sealed fingerprints and start the real process.
 7. Repeat the zero-tools/MCP assertion immediately before the provider call. A `pre_tool_call` hook
-   blocks any later tool attempt as a secondary control.
-8. Compare the selected source files, terminate the process tree when needed, and delete the
+   appends each blocked attempt to dedicated evidence; preflight attempts fail closed and do not
+   count as evaluated-run attempts.
+8. Reject a known provider credential found in child output, selected state, or evidence files.
+9. Compare the selected source files, terminate the process tree when needed, and delete the
    replica.
 
-Any tool, MCP server, fingerprint change, source change, timeout, unverified process exit, or
-cleanup failure invalidates the run.
+Any tool, MCP server, seal change, source change, detected credential, timeout, unverified process
+exit, or cleanup failure invalidates the run.
 
 ## Supported Surface
 
@@ -151,11 +153,12 @@ undeclared change; it then applies the case's `allowed_state_paths` policy. A bl
 an undeclared state change, or behavior contrary to the expectation is a finding. Missing evidence,
 judge failure or disagreement, `context_dependent`, and `manual` require review.
 
-The result uses `wallbreaker.hermes-campaign-report/v1`. It contains schemas, software versions,
-stable fingerprints, enums, counts, state component names, attestations, cleanup receipts, and a
-one-sided 95% Wilson lower bound when a split is complete. It never stores suite IDs, case IDs,
+The result uses `wallbreaker.hermes-campaign-report/v2`. It contains schemas, software versions,
+HMAC-scoped fingerprints, enums, counts, state component names, attestations, cleanup receipts, and
+a one-sided 95% Wilson lower bound when a split is complete. It never stores suite IDs, case IDs,
 objectives, prompts, responses, judge rationales, endpoint URLs, context paths, credentials, or
-conversation logs.
+conversation logs. Fingerprints from different campaign plans are unlinkable without the operator's
+key.
 
 Campaign writes are atomic. `resume_campaign` runs pending repetitions and replaces interrupted or
 failed attempts with a new attempt on a fresh replica. It never continues an interrupted replica.
@@ -171,11 +174,16 @@ Plan a campaign before any provider or replica is created:
 wallbreaker hermes run SUITE --config CONFIG --output RUN --dry-run
 ```
 
+Set `WALLBREAKER_HERMES_EVIDENCE_KEY` to an operator-held random value of at least 32 bytes before
+planning or running a campaign. Keep the same key for dry run, execution, and resume; do not
+commit it or store it beside the report. Offline review and structural verification do not need the
+key because they treat persisted fingerprints as opaque evidence.
+
 The command loads Wallbreaker's normal environment, validates the suite, configuration,
 credentials, fixed Hermes runtime, selected context, limits, output, and any resume report, and
 runs local Git and Python identity checks. It creates no provider, network request, temporary
-replica, or campaign report. It emits deterministic NDJSON using
-`wallbreaker.hermes-cli-event/v1`. The `plan.validated` event contains hash-only identities,
+replica, or campaign report. It emits closed NDJSON using
+`wallbreaker.hermes-cli-event/v1`. The `plan.validated` event contains HMAC-scoped identities,
 limits, maximum known network requests, maximum Hermes processes, and a confirmation token.
 
 After the operator authorizes that exact plan, repeat the command with the same arguments and
@@ -183,11 +191,12 @@ limits:
 
 ```text
 wallbreaker hermes run SUITE --config CONFIG --output RUN \
-  --authorized --confirm sha256:PLAN_TOKEN
+  --authorized --confirm hmac-sha256:PLAN_TOKEN
 ```
 
-Changing the suite, effective configuration, limits, output path, or resume mode changes the
-token. Use `--resume` only after a new dry run. The initial limits are 1-10 repetitions, 1-50
+Changing the suite, effective configuration, limits, output path, Wallbreaker version, resume
+mode, or validated checkpoint changes the token. Use `--resume` only after a new dry run. The
+initial limits are 1-10 repetitions, 1-50
 attacker rounds, 1-20 target fires per repetition, 1-131072 attacker tokens, 1-8192 target tokens,
 a timeout above zero and no more than 600 seconds, and at most 1000 known network requests.
 

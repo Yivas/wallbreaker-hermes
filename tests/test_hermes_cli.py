@@ -11,6 +11,14 @@ from wallbreaker.cli import build_sub_parser, main
 from wallbreaker.config import Config, Endpoint
 
 
+@pytest.fixture(autouse=True)
+def _evidence_key(monkeypatch):
+    monkeypatch.setenv(
+        "WALLBREAKER_HERMES_EVIDENCE_KEY",
+        "fixture-evidence-key-with-at-least-thirty-two-bytes",
+    )
+
+
 def _config():
     attacker = Endpoint("brain", "openai", "https://fixture.invalid", "fixture/brain")
     target = Endpoint("target", "hermes-lab", "", "fixture/target")
@@ -23,17 +31,21 @@ def _config():
     )
 
 
-def _plan(token="sha256:" + "a" * 64):
+def _plan(token=None):
+    salt = "a" * 64
     return {
-        "schema": "wallbreaker.hermes-campaign-plan/v1",
+        "schema": "wallbreaker.hermes-campaign-plan/v2",
         "versions": {
+            "wallbreaker": "0.2.0",
             "hermes_release": "v2026.8.13",
             "hermes_agent": "0.20.1",
             "hermes_commit": "f" * 40,
         },
+        "fingerprint_salt": salt,
         "suite_fingerprint": "1" * 64,
         "config_fingerprint": "2" * 64,
         "output_fingerprint": "3" * 64,
+        "resume_checkpoint_fingerprint": None,
         "resume": False,
         "case_count": 3,
         "repetition_count": 9,
@@ -47,7 +59,7 @@ def _plan(token="sha256:" + "a" * 64):
         },
         "maximum_network_requests": 324,
         "maximum_hermes_processes": 216,
-        "confirmation": token,
+        "confirmation": token or f"hmac-sha256:{salt}:" + "b" * 64,
     }
 
 
@@ -228,7 +240,7 @@ def test_confirmation_mismatch_fails_before_runner(monkeypatch, capsys):
             "run.json",
             "--authorized",
             "--confirm",
-            "sha256:" + "b" * 64,
+            "hmac-sha256:" + "c" * 64 + ":" + "d" * 64,
         ]
     )
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -83,30 +84,42 @@ def _run_corpus_verify(args) -> int:
                 any_problem = True
 
         if updated:
-            # Write back to lock file using atomic_write
             from ._fsutil import atomic_write
 
             import datetime
-            today = datetime.date.today().isoformat()
 
-            lines = [
-                "# Corpus integrity pins — see wallbreaker corpus verify\n",
-                "# Each entry pins a runtime-fetched corpus to a commit SHA.\n",
-                "# Mismatch at load time fails closed (refuses to load the corpus).\n",
-            ]
-            for name, entry in corpora.items():
-                sha = updated.get(name, entry.get("sha", "UNRESOLVED"))
-                repo = entry.get("repo", "")
-                fetched = today if name in updated else entry.get("fetched", today)
-                note = entry.get("note", "")
-                if name in updated:
-                    note = f"Pinned on {today} via git ls-remote"
-                lines.append(f"\n[corpus.{name}]\n")
-                lines.append(f'repo = "{repo}"\n')
-                lines.append(f'sha = "{sha}"\n')
-                lines.append(f'fetched = "{fetched}"\n')
-                lines.append(f'note = "{note}"\n')
-            atomic_write(lock_path, "".join(lines))
+            today = datetime.date.today().isoformat()
+            text = lock_path.read_text(encoding="utf-8")
+            for name, sha in updated.items():
+                section = re.compile(
+                    rf"(?ms)(^\[corpus\.{re.escape(name)}\]\n)(.*?)(?=^\[|\Z)"
+                )
+
+                def replace_section(match, *, resolved_sha=sha):
+                    body = match.group(2)
+                    replacements = {
+                        "sha": resolved_sha,
+                        "fetched": today,
+                        "note": f"Pinned on {today} via git ls-remote",
+                    }
+                    for field, value in replacements.items():
+                        line = re.compile(
+                            rf'(?m)^{field}[ \t]*=[ \t]*"[^"]*"[ \t]*$'
+                        )
+                        if line.search(body):
+                            body = line.sub(f'{field} = "{value}"', body)
+                        else:
+                            body += f'{field} = "{value}"\n'
+                    return match.group(1) + body
+
+                text, count = section.subn(replace_section, text, count=1)
+                if count != 1:
+                    print(
+                        f"  {name}: lock section disappeared before update",
+                        file=sys.stderr,
+                    )
+                    any_problem = True
+            atomic_write(lock_path, text)
             print(f"[corpus verify] lock file updated: {lock_path}", file=sys.stderr)
 
             # Reload data after update

@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
+import hmac
 import json
 import math
 import os
 import re
+import secrets
 import threading
 from contextlib import contextmanager
 from collections.abc import Callable
@@ -42,8 +44,9 @@ from .transforms import TRANSFORMS, apply_chain, decode_chain
 
 
 SUITE_SCHEMA = "wallbreaker.hermes-campaign-suite/v1"
-REPORT_SCHEMA = "wallbreaker.hermes-campaign-report/v1"
-PLAN_SCHEMA = "wallbreaker.hermes-campaign-plan/v1"
+REPORT_SCHEMA = "wallbreaker.hermes-campaign-report/v2"
+PLAN_SCHEMA = "wallbreaker.hermes-campaign-plan/v2"
+EVIDENCE_KEY_ENV = "WALLBREAKER_HERMES_EVIDENCE_KEY"
 _MAX_SUITE_BYTES = 256 * 1024
 _MAX_REPORT_BYTES = 16 * 1024 * 1024
 _MAX_NETWORK_REQUESTS = 1000
@@ -184,6 +187,42 @@ _UniqueKeyLoader.add_constructor(
 def _fingerprint(value) -> str:
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _evidence_key() -> bytes:
+    key = os.environ.get(EVIDENCE_KEY_ENV, "").encode("utf-8")
+    if len(key) < 32:
+        raise CampaignError(
+            f"{EVIDENCE_KEY_ENV} must contain at least 32 bytes for private evidence."
+        )
+    return key
+
+
+def _validate_fingerprint_salt(value: str) -> str:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise CampaignError("Campaign fingerprint salt is invalid.")
+    return value
+
+
+def _private_fingerprint(domain: str, value, fingerprint_salt: str) -> str:
+    salt = bytes.fromhex(_validate_fingerprint_salt(fingerprint_salt))
+    encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    payload = domain.encode("ascii") + b"\0" + salt + encoded.encode("utf-8")
+    return hmac.new(_evidence_key(), payload, hashlib.sha256).hexdigest()
+
+
+def confirmation_fingerprint_salt(token: str | None) -> str | None:
+    if not token:
+        return None
+    parts = token.split(":")
+    if (
+        len(parts) != 3
+        or parts[0] != "hmac-sha256"
+        or re.fullmatch(r"[0-9a-f]{64}", parts[1]) is None
+        or re.fullmatch(r"[0-9a-f]{64}", parts[2]) is None
+    ):
+        return None
+    return parts[1]
 
 
 def _read_suite(path: Path) -> str:
@@ -492,11 +531,26 @@ def build_campaign_plan(
     attacker_endpoint: Endpoint | None = None,
     *,
     resume: bool = False,
+    fingerprint_salt: str | None = None,
     _snapshot: _CampaignSnapshot | None = None,
 ) -> dict:
     suite = load_suite(suite) if isinstance(suite, (str, Path)) else suite
     settings = settings or CampaignSettings()
     attacker_endpoint = attacker_endpoint or config.profile()
+    path = Path(output_path)
+    existing_report = None
+    if resume:
+        if not path.is_file():
+            raise CampaignError("Campaign resume output does not exist.")
+        if fingerprint_salt is None:
+            existing_report = load_campaign_report(path)
+            fingerprint_salt = existing_report["fingerprint_salt"]
+    elif path.exists():
+        raise CampaignError("Campaign output already exists; use --resume.")
+    fingerprint_salt = _validate_fingerprint_salt(
+        fingerprint_salt or secrets.token_hex(32)
+    )
+
     snapshot = _snapshot or _campaign_snapshot(config, attacker_endpoint, settings)
     config = snapshot.config
     attacker_endpoint = snapshot.attacker
@@ -507,13 +561,15 @@ def build_campaign_plan(
     _require_endpoint_credentials(attacker_endpoint, judge, target)
     validate_hermes_runtime(target)
     config_fingerprint = snapshot.config_fingerprint
-    path = Path(output_path)
+    resume_checkpoint_fingerprint = None
     if resume:
-        if not path.is_file():
-            raise CampaignError("Campaign resume output does not exist.")
-        _load_report(path, suite, config_fingerprint, settings)
-    elif path.exists():
-        raise CampaignError("Campaign output already exists; use --resume.")
+        report = existing_report or load_campaign_report(path)
+        _validate_report_identity(
+            report, suite, config_fingerprint, settings, fingerprint_salt
+        )
+        resume_checkpoint_fingerprint = _private_fingerprint(
+            "resume-checkpoint", report, fingerprint_salt
+        )
 
     repetition_count = len(suite.cases) * settings.repetitions
     attacker_requests = repetition_count * settings.max_rounds
@@ -525,15 +581,22 @@ def build_campaign_plan(
     plan = {
         "schema": PLAN_SCHEMA,
         "versions": {
+            "wallbreaker": __version__,
             "hermes_release": HERMES_BASELINE_RELEASE,
             "hermes_agent": HERMES_BASELINE_VERSION,
             "hermes_commit": HERMES_BASELINE_SHA,
         },
-        "suite_fingerprint": suite.fingerprint,
-        "config_fingerprint": config_fingerprint,
-        "output_fingerprint": hashlib.sha256(
-            str(path.resolve()).encode("utf-8")
-        ).hexdigest(),
+        "fingerprint_salt": fingerprint_salt,
+        "suite_fingerprint": _private_fingerprint(
+            "suite", suite.fingerprint, fingerprint_salt
+        ),
+        "config_fingerprint": _private_fingerprint(
+            "config", config_fingerprint, fingerprint_salt
+        ),
+        "output_fingerprint": _private_fingerprint(
+            "output-path", str(path.resolve()), fingerprint_salt
+        ),
+        "resume_checkpoint_fingerprint": resume_checkpoint_fingerprint,
         "resume": resume,
         "case_count": len(suite.cases),
         "repetition_count": repetition_count,
@@ -548,8 +611,11 @@ def build_campaign_plan(
         "maximum_network_requests": maximum_network_requests,
         "maximum_hermes_processes": target_requests * 2,
     }
-    canonical = json.dumps(plan, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-    return {**plan, "confirmation": f"sha256:{hashlib.sha256(canonical.encode()).hexdigest()}"}
+    confirmation = _private_fingerprint("confirmation", plan, fingerprint_salt)
+    return {
+        **plan,
+        "confirmation": f"hmac-sha256:{fingerprint_salt}:{confirmation}",
+    }
 
 
 def _new_attempt(repetition_id: str, ordinal: int) -> dict:
@@ -571,11 +637,23 @@ def _expected_repetition_identities(
     suite: CampaignSuite,
     config_fingerprint: str,
     settings: CampaignSettings,
+    fingerprint_salt: str,
 ) -> list[dict]:
+    private_config = _private_fingerprint(
+        "config", config_fingerprint, fingerprint_salt
+    )
     return [
         {
-            "id": _fingerprint([case.fingerprint, config_fingerprint, index]),
-            "case_fingerprint": case.fingerprint,
+            "id": _fingerprint(
+                [
+                    _private_fingerprint("case", case.fingerprint, fingerprint_salt),
+                    private_config,
+                    index,
+                ]
+            ),
+            "case_fingerprint": _private_fingerprint(
+                "case", case.fingerprint, fingerprint_salt
+            ),
             "split": case.split.value,
             "index": index,
         }
@@ -588,22 +666,33 @@ def _initial_report(
     suite: CampaignSuite,
     config_fingerprint: str,
     settings: CampaignSettings,
+    fingerprint_salt: str | None = None,
 ) -> dict:
+    fingerprint_salt = _validate_fingerprint_salt(
+        fingerprint_salt or secrets.token_hex(32)
+    )
     repetitions = [
         {**identity, "attempts": [_new_attempt(identity["id"], 0)]}
-        for identity in _expected_repetition_identities(suite, config_fingerprint, settings)
+        for identity in _expected_repetition_identities(
+            suite, config_fingerprint, settings, fingerprint_salt
+        )
     ]
     report = {
         "schema": REPORT_SCHEMA,
         "status": CampaignStatus.PARTIAL.value,
+        "fingerprint_salt": fingerprint_salt,
         "versions": {
             "wallbreaker": __version__,
             "hermes_agent": HERMES_BASELINE_VERSION,
             "hermes_commit": HERMES_BASELINE_SHA,
             "suite": SUITE_SCHEMA,
         },
-        "suite_fingerprint": suite.fingerprint,
-        "config_fingerprint": config_fingerprint,
+        "suite_fingerprint": _private_fingerprint(
+            "suite", suite.fingerprint, fingerprint_salt
+        ),
+        "config_fingerprint": _private_fingerprint(
+            "config", config_fingerprint, fingerprint_salt
+        ),
         "case_count": len(suite.cases),
         "repetitions_per_case": settings.repetitions,
         "repetition_count": len(repetitions),
@@ -620,10 +709,10 @@ def _latest(repetition: dict) -> dict:
 
 def _combine_assessments(values) -> Assessment:
     assessments = set(values)
-    if Assessment.FINDING in assessments:
-        return Assessment.FINDING
     if Assessment.MANUAL_REQUIRED in assessments:
         return Assessment.MANUAL_REQUIRED
+    if Assessment.FINDING in assessments:
+        return Assessment.FINDING
     return Assessment.PASS
 
 
@@ -668,7 +757,12 @@ async def _evaluate_fire(
     result: HermesLabResult,
     judge_endpoint: Endpoint | None,
     before_judge: Callable[[dict], None] | None = None,
+    *,
+    fingerprint_salt: str | None = None,
 ) -> dict:
+    fingerprint_salt = _validate_fingerprint_salt(
+        fingerprint_salt or secrets.token_hex(32)
+    )
     heuristic_label, _ = classify(response)
     evidence = result.evidence
     if evidence is None:
@@ -691,11 +785,19 @@ async def _evaluate_fire(
         tool_attempt_count = evidence.tool_attempt_count
         preflight_fingerprint = evidence.preflight_fingerprint
         run_fingerprint = evidence.run_fingerprint
-        initial_state_fingerprint = _fingerprint(dict(evidence.initial_state))
-        final_state_fingerprint = _fingerprint(dict(evidence.final_state))
+        initial_state_fingerprint = _private_fingerprint(
+            "state", dict(evidence.initial_state), fingerprint_salt
+        )
+        final_state_fingerprint = _private_fingerprint(
+            "state", dict(evidence.final_state), fingerprint_salt
+        )
     fire = {
-        "prompt_fingerprint": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
-        "response_fingerprint": hashlib.sha256(response.encode("utf-8")).hexdigest(),
+        "prompt_fingerprint": _private_fingerprint(
+            "prompt", prompt, fingerprint_salt
+        ),
+        "response_fingerprint": _private_fingerprint(
+            "response", response, fingerprint_salt
+        ),
         "assessment": Assessment.MANUAL_REQUIRED.value,
         "behavior": {
             "expected": case.expected_behavior.value,
@@ -761,7 +863,11 @@ def _register_target(
     on_invocation_closed: Callable[[CleanupReceipt], None] | None = None,
     on_invocation_unverified: Callable[[CleanupReceipt | None], None] | None = None,
     before_fire: Callable[[], None] | None = None,
+    fingerprint_salt: str | None = None,
 ) -> None:
+    fingerprint_salt = _validate_fingerprint_salt(
+        fingerprint_salt or secrets.token_hex(32)
+    )
     target_invocations = 0
 
     async def query_target(args: dict, _ctx: ToolContext) -> str:
@@ -847,6 +953,7 @@ def _register_target(
             result,
             judge_endpoint,
             persist_base,
+            fingerprint_salt=fingerprint_salt,
         )
         if transform_error_type is not None:
             evaluated["assessment"] = _combine_assessments(
@@ -893,6 +1000,7 @@ async def _run_repetition(
     on_invocation_unverified: Callable[[CleanupReceipt | None], None] | None = None,
     before_fire: Callable[[], None] | None = None,
     attacker_system: str | None = None,
+    fingerprint_salt: str | None = None,
 ) -> tuple[str, Assessment, list[dict]]:
     fires: list[dict] = []
     fire_limit_reached = False
@@ -935,6 +1043,7 @@ async def _run_repetition(
         on_invocation_closed,
         mark_unverified_invocation,
         check_plan,
+        fingerprint_salt,
     )
     register_control(registry)
     attacker = build_provider(attacker_endpoint)
@@ -1198,6 +1307,7 @@ def validate_campaign_report(report: dict) -> dict:
         {
             "schema",
             "status",
+            "fingerprint_salt",
             "versions",
             "suite_fingerprint",
             "config_fingerprint",
@@ -1212,8 +1322,11 @@ def validate_campaign_report(report: dict) -> dict:
         CampaignStatus(root["status"])
     except (TypeError, ValueError):
         _report_invalid()
-    if root["schema"] != REPORT_SCHEMA or not _is_hash(root["suite_fingerprint"]) or not _is_hash(
-        root["config_fingerprint"]
+    if (
+        root["schema"] != REPORT_SCHEMA
+        or not _is_hash(root["fingerprint_salt"])
+        or not _is_hash(root["suite_fingerprint"])
+        or not _is_hash(root["config_fingerprint"])
     ):
         _report_invalid()
     if (
@@ -1229,6 +1342,7 @@ def validate_campaign_report(report: dict) -> dict:
     )
     if (
         not all(isinstance(value, str) and 0 < len(value) <= 128 for value in versions.values())
+        or versions["wallbreaker"] != __version__
         or versions["hermes_agent"] != HERMES_BASELINE_VERSION
         or versions["hermes_commit"] != HERMES_BASELINE_SHA
         or versions["suite"] != SUITE_SCHEMA
@@ -1722,13 +1836,13 @@ def campaign_verification_issues(report: dict) -> tuple[str, ...]:
     return tuple(dict.fromkeys(issues))
 
 
-def _load_report(
-    path: Path,
+def _validate_report_identity(
+    report: dict,
     suite: CampaignSuite,
     config_fingerprint: str,
     settings: CampaignSettings,
-) -> dict:
-    report = load_campaign_report(path)
+    fingerprint_salt: str,
+) -> None:
     topology = [
         {
             key: repetition[key]
@@ -1737,12 +1851,33 @@ def _load_report(
         for repetition in report["repetitions"]
     ]
     if (
-        report["suite_fingerprint"] != suite.fingerprint
-        or report["config_fingerprint"] != config_fingerprint
+        report["fingerprint_salt"] != fingerprint_salt
+        or report["suite_fingerprint"]
+        != _private_fingerprint("suite", suite.fingerprint, fingerprint_salt)
+        or report["config_fingerprint"]
+        != _private_fingerprint("config", config_fingerprint, fingerprint_salt)
         or topology
-        != _expected_repetition_identities(suite, config_fingerprint, settings)
+        != _expected_repetition_identities(
+            suite, config_fingerprint, settings, fingerprint_salt
+        )
     ):
         raise CampaignError("Campaign report identity does not match this run.")
+
+
+def _load_report(
+    path: Path,
+    suite: CampaignSuite,
+    config_fingerprint: str,
+    settings: CampaignSettings,
+    fingerprint_salt: str | None = None,
+) -> dict:
+    report = load_campaign_report(path)
+    fingerprint_salt = _validate_fingerprint_salt(
+        fingerprint_salt or report["fingerprint_salt"]
+    )
+    _validate_report_identity(
+        report, suite, config_fingerprint, settings, fingerprint_salt
+    )
     return report
 
 
@@ -1760,12 +1895,21 @@ async def _run_campaign(
     suite = load_suite(suite) if isinstance(suite, (str, Path)) else suite
     settings = settings or CampaignSettings()
     attacker_endpoint = attacker_endpoint or config.profile()
+    path = Path(output_path)
+    existing_report = load_campaign_report(path) if resume else None
+    if expected_plan is not None:
+        fingerprint_salt = _validate_fingerprint_salt(
+            expected_plan.get("fingerprint_salt")
+        )
+    elif existing_report is not None:
+        fingerprint_salt = existing_report["fingerprint_salt"]
+    else:
+        fingerprint_salt = secrets.token_hex(32)
     snapshot = _campaign_snapshot(config, attacker_endpoint, settings)
     config = snapshot.config
     attacker_endpoint = snapshot.attacker
     judge = snapshot.judge
     config_fingerprint = snapshot.config_fingerprint
-    path = Path(output_path)
     if expected_plan is not None:
         actual_plan = build_campaign_plan(
             suite,
@@ -1774,6 +1918,7 @@ async def _run_campaign(
             settings,
             attacker_endpoint,
             resume=resume,
+            fingerprint_salt=fingerprint_salt,
             _snapshot=snapshot,
         )
         if actual_plan["confirmation"] != expected_plan.get("confirmation"):
@@ -1784,18 +1929,28 @@ async def _run_campaign(
         hermes_context_fingerprint=snapshot.context_fingerprint,
     )
     if resume:
-        report = _load_report(path, suite, config_fingerprint, settings)
+        report = existing_report or _load_report(
+            path, suite, config_fingerprint, settings, fingerprint_salt
+        )
+        _validate_report_identity(
+            report, suite, config_fingerprint, settings, fingerprint_salt
+        )
     else:
         if path.exists():
             raise CampaignError("Campaign output already exists; use resume_campaign.")
-        report = _initial_report(suite, config_fingerprint, settings)
+        report = _initial_report(
+            suite, config_fingerprint, settings, fingerprint_salt
+        )
         _write_report(path, report)
     if event_sink is not None:
         event_sink(
             "campaign.started",
             {"status": report["status"], "repetitions": len(report["repetitions"])},
         )
-    case_by_fingerprint = {case.fingerprint: case for case in suite.cases}
+    case_by_fingerprint = {
+        _private_fingerprint("case", case.fingerprint, fingerprint_salt): case
+        for case in suite.cases
+    }
 
     def assert_plan_current() -> None:
         if expected_plan is None:
@@ -1931,6 +2086,7 @@ async def _run_campaign(
                 invocation_unverified,
                 assert_plan_current,
                 attacker_system=snapshot.attacker_system,
+                fingerprint_salt=fingerprint_salt,
             )
         except asyncio.CancelledError:
             attempt["status"] = AttemptStatus.REPLACED.value
@@ -2021,6 +2177,14 @@ async def resume_campaign(
     )
 
 
+def _attempt_has_confirmed_finding(attempt: dict) -> bool:
+    return any(
+        component["assessment"] == Assessment.FINDING.value
+        for fire in attempt["fires"]
+        for component in (fire["behavior"], fire["state"], fire["tools"])
+    )
+
+
 def _apply_reviews(
     output_path: str | Path,
     decisions: Mapping[str, Assessment | str],
@@ -2043,6 +2207,8 @@ def _apply_reviews(
         attempt = attempts.get(attempt_id)
         if attempt is None or attempt["status"] != AttemptStatus.REVIEW_REQUIRED.value:
             raise CampaignError("Manual review target is not pending review.")
+        if decision == Assessment.PASS and _attempt_has_confirmed_finding(attempt):
+            raise CampaignError("Manual review cannot clear a confirmed finding.")
         validated.append((attempt, decision))
     for attempt, decision in validated:
         attempt["review"] = decision.value

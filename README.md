@@ -29,16 +29,16 @@ an LLM judge, and reliability validation.
 ## Project status
 
 The standard Wallbreaker CLI, TUI, dashboard, MCP server, attack tools, judge, and reliability
-validation work as documented below. The unreleased Hermes laboratory adapter targets the fixed
-Hermes Agent `v2026.8.13` revision. It supports one text turn with a clean home or selected SOUL,
-memory, and working-directory rules. It rejects tools, MCP, custom prompt layers, profiles,
-prefill, continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md).
-The campaign API and `wallbreaker hermes run|review|verify` CLI load versioned YAML suites, run
-isolated repetitions through the existing autonomous loop, and write hash-only JSON evidence for
-manual review. The optional operator skill lives under `integrations/hermes/`; UI support remains
-unreleased.
+validation work as documented below. The Hermes laboratory adapter targets the fixed Hermes Agent
+`v2026.8.13` revision. It supports one text turn with a clean home or selected SOUL, memory, and
+working-directory rules. It rejects tools, MCP, custom prompt layers, profiles, prefill,
+continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md). The
+campaign API and `wallbreaker hermes run|review|verify` CLI load versioned YAML suites, run isolated
+repetitions through the existing autonomous loop, and write HMAC-scoped JSON evidence for manual
+review. The optional operator skill lives under `integrations/hermes/`.
 
-The Python package and commands remain `wallbreaker` and `wb` for upstream compatibility.
+The PyPI distribution is `wallbreaker-hermes`. The import package and commands remain
+`wallbreaker` and `wb` for upstream compatibility.
 
 ## Highlights
 
@@ -90,6 +90,14 @@ cd wallbreaker-hermes
 ```
 
 ## Install
+
+Install the release from PyPI:
+
+```bash
+pip install wallbreaker-hermes
+```
+
+For local development from a clone:
 
 ```bash
 python -m venv .venv
@@ -298,8 +306,8 @@ wallbreaker export --out findings.json   # structured findings JSON
 wallbreaker export --fail-on-finding     # exit 2 if any bypass -> fails CI
 ```
 
-A ready-to-rename GitHub Actions gate lives at
-`.github/workflows/redteam-gate.example.yml`.
+An opt-in live example lives at `docs/examples/redteam-gate.yml`. It is outside
+`.github/workflows` so cloning the repository cannot schedule provider calls.
 
 ## Test
 
@@ -326,10 +334,12 @@ inspection. **Agent** is dedicated to the autonomous Attack → Target → Judge
 </details>
 
 ```bash
-pip install -e ".[dashboard]"                       # FastAPI + uvicorn
-cd wallbreaker/dashboard/web && npm install && npm run build && cd -
+pip install "wallbreaker-hermes[dashboard]"          # FastAPI + uvicorn
 wallbreaker dashboard                                # binds to 127.0.0.1:8787
 ```
+
+The wheel includes the compiled dashboard. Contributors using an editable clone can rebuild it
+with `npm ci && npm run build` under `wallbreaker/dashboard/web`.
 
 Open WebUI V2 at <http://127.0.0.1:8787/v2>. The original dashboard remains available at
 <http://127.0.0.1:8787/legacy> during the parity rollout. The backend reuses the same
@@ -358,5 +368,6 @@ Setup, architecture, and house rules are in [CONTRIBUTING.md](CONTRIBUTING.md). 
 
 [AGPL-3.0-or-later](LICENSE). Wallbreaker is copyleft: any modified version (**including
 one you run as a network/hosted service**) must make its complete corresponding source
-available under the same license. Third-party jailbreak corpora (L1B3RT4S, P4RS3LT0NGV3,
-ENI) are fetched at runtime, not redistributed; see [NOTICE](NOTICE).
+available under the same license. Third-party corpora and benchmark rows are fetched only when
+requested and are not redistributed; see [NOTICE](NOTICE) and
+[External data sources](docs/EXTERNAL_DATA.md).

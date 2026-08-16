@@ -1,7 +1,7 @@
 ---
 name: wallbreaker-hermes
 description: Operate authorized Wallbreaker Hermes campaigns.
-version: 0.1.0
+version: 0.2.0
 author: Yivas
 license: AGPL-3.0-or-later
 platforms: [linux, macos, windows]
@@ -105,6 +105,6 @@ as a syntax error, not pending review.
 
 ## Verification
 
-A completed workflow has a `wallbreaker.hermes-campaign-report/v1` artifact, no pending review,
+A completed workflow has a `wallbreaker.hermes-campaign-report/v2` artifact, no pending review,
 and verified attestation and cleanup evidence. Keep the report path; do not reproduce its contents
 outside the operator's requested destination.
