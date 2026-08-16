@@ -25,7 +25,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install -U pip
-          pip install -e ".[dev,dashboard,barcodes]" hypothesis
+          pip install -e ".[dev]"
           pip install "httpx==${{ matrix.httpx-version }}"
 
       - name: Run test suite
@@ -95,7 +95,7 @@ jobs:
           python -m venv /tmp/wallbreaker-release
           wheel=$(ls dist/*.whl)
           /tmp/wallbreaker-release/bin/pip install "$wheel[dashboard]"
-          /tmp/wallbreaker-release/bin/python -c "import wallbreaker; assert wallbreaker.__version__ == '0.2.1'"
+          /tmp/wallbreaker-release/bin/python -c "import wallbreaker; assert wallbreaker.__version__ == '0.2.2'"
           /tmp/wallbreaker-release/bin/python -c "from pathlib import Path; import wallbreaker.dashboard.server as server; assert (Path(server.__file__).parent / 'web' / 'dist' / 'index.html').is_file()"
           /tmp/wallbreaker-release/bin/wallbreaker --help
           /tmp/wallbreaker-release/bin/wb --help

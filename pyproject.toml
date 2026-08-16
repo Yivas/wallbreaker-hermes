@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wallbreaker-hermes"
-version = "0.2.1"
+version = "0.2.2"
 description = "Wallbreaker fork with an opt-in Hermes Agent red-team laboratory"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -42,6 +42,10 @@ Issues = "https://github.com/Yivas/wallbreaker-hermes/issues"
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "hypothesis>=6.0",
+    "fastapi>=0.110",
+    "qrcode[pil]>=7.4",
+    "python-barcode>=0.15",
 ]
 barcodes = [
     "qrcode[pil]>=7.4",

@@ -2,10 +2,19 @@
 
 ## Unreleased
 
+## 0.2.2 - 2026-08-16
+
+This is the first published `wallbreaker-hermes` distribution. The `v0.2.0` and `v0.2.1`
+workflows stopped before creating a GitHub Release or uploading to PyPI.
+
+### Fixed
+
+- Completed the `dev` extra with the dashboard, barcode, and property-testing dependencies used by
+  both the branch and release test suites.
+
 ## 0.2.1 - 2026-08-16
 
-This is the first published `wallbreaker-hermes` distribution. The `v0.2.0` workflow stopped
-before creating a GitHub Release or uploading to PyPI.
+The `v0.2.1` workflow stopped before creating a GitHub Release or uploading to PyPI.
 
 ### Added
 

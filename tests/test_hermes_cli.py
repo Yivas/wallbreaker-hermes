@@ -36,7 +36,7 @@ def _plan(token=None):
     return {
         "schema": "wallbreaker.hermes-campaign-plan/v2",
         "versions": {
-            "wallbreaker": "0.2.1",
+            "wallbreaker": "0.2.2",
             "hermes_release": "v2026.8.13",
             "hermes_agent": "0.20.1",
             "hermes_commit": "f" * 40,
