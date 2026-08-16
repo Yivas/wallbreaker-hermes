@@ -283,7 +283,7 @@ def test_context_root_replacement_fails_closed(tmp_path, monkeypatch):
         return original_open(root)
 
     monkeypatch.setattr(hermes_lab, "_open_context_root", replace_then_open)
-    with pytest.raises(ProviderError, match="context.*links"):
+    with pytest.raises(ProviderError, match=r"context (?:root|path)"):
         replica.prepare(1024)
     asyncio.run(replica.close())
 
