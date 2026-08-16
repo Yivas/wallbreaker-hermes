@@ -8,16 +8,13 @@ import shutil
 import signal
 import tempfile
 import time
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 from ..agent.messages import user
-from ..config import Endpoint
 from .registry import ToolContext, ToolRegistry
 
 CARD_DIR = "wb_images/cards"
-DEFAULT_ART_MODEL = "google/gemini-3-pro-image"
 _CANVAS = (2000, 1200)
 
 # Chrome/Chromium headless HTML->PNG render: the PRIMARY card renderer. Reverse-engineered
@@ -25,8 +22,8 @@ _CANVAS = (2000, 1200)
 # file + `chrome --headless=new --screenshot=...`, iterated several times) - replaying that
 # exact HTML+flags reproduces it byte-for-byte (0 pixel diff). Deterministic, free, no
 # refusal risk, exact text fidelity - strictly better than image-gen when a local Chrome is
-# available, so it goes first; image-gen and the Pillow renderer are fallbacks for hosts
-# without a local browser binary.
+# available, so it goes first; an explicitly configured image endpoint and the Pillow
+# renderer are fallbacks for hosts without a local browser binary.
 _CHROME_CANDIDATES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -376,7 +373,7 @@ def _row_html(i: int, row: dict) -> str:
 
 def render_card_html_source(target_model: str, rows: list[dict], stamp: str, footer_right: str) -> str:
     """Fill the HTML template via plain .replace (NOT .format - the CSS block is full of
-    literal '{'/'}' braces that would make str.format choke; see CLAUDE.md template lesson).
+    literal '{'/'}' braces that would make str.format choke.
     """
     height = _card_height_css(len(rows))
     rows_html = "\n".join(_row_html(i, row) for i, row in enumerate(rows, 1))
@@ -472,14 +469,8 @@ async def render_card_chrome(target_model: str, rows: list[dict], stamp: str, fo
         return data, ""
 
 
-def _resolve_art_endpoint(ctx: ToolContext) -> Endpoint | None:
-    art = getattr(ctx.config, "art", None)
-    if art is not None:
-        return art
-    base = ctx.config.profiles.get("openrouter")
-    if base is None or not base.resolved_key():
-        return None
-    return replace(base, name="art-auto", modality="image", model=DEFAULT_ART_MODEL)
+def _resolve_art_endpoint(ctx: ToolContext):
+    return getattr(ctx.config, "art", None)
 
 
 def _save_bytes(ctx: ToolContext, raw: bytes, ext: str, target_model: str) -> str:
@@ -666,8 +657,8 @@ async def generate_card(
     1. Local headless Chrome/Chromium rendering the real HTML/CSS card - deterministic,
        free, exact text fidelity (reproduces wallbreaker_sonnet5_breach.png pixel-for-
        pixel). Used whenever a Chrome/Chromium binary is found on the host.
-    2. The configured [art] image-gen endpoint - a polished AI-rendered graphic when no
-       local browser is available but an OpenRouter image model is configured.
+    2. The explicitly configured [art] image-gen endpoint - a polished AI-rendered
+       graphic when the operator has opted into sending the scorecard data.
     3. A locally Pillow-rendered card - zero external dependencies, always available.
     """
     target_model = target_model or "unknown-target"
@@ -683,7 +674,7 @@ async def generate_card(
         path = _save_bytes(ctx, raw, "png", target_model)
         ctx.emit(f"generate_session_card: saved {path} via local Chrome render")
         return f"Session card saved to {path} (Chrome HTML render)"
-    ctx.emit(f"generate_session_card: Chrome render unavailable ({reason}), trying [art] endpoint")
+    ctx.emit(f"generate_session_card: Chrome render unavailable ({reason}), checking [art] endpoint")
 
     endpoint = _resolve_art_endpoint(ctx)
     if endpoint is not None:
@@ -742,7 +733,7 @@ def register(registry: ToolRegistry) -> None:
             "winning techniques - the same scorecard style used for engagement writeups) "
             "and save it under wb_images/cards/<target>_<datetime>.png. Renders via a "
             "local headless Chrome/Chromium first (deterministic, exact text fidelity); "
-            "falls back to the configured [art] image-gen endpoint, then to a local "
+            "uses the [art] image-gen endpoint only when explicitly configured, then a local "
             "Pillow-drawn card, so this always produces a file. finish() calls this "
             "automatically when given a results= table, but you can call it directly any "
             "time you want a fresh card."

@@ -69,7 +69,7 @@ class Endpoint:
     # endpoints.
     system_prompt: str = ""
     # anthropic-protocol auth header: "x-api-key" (native Anthropic, default) or "bearer"
-    # (Authorization: Bearer <key>) for third-party proxies (tokies.cc etc.) that use the
+    # (Authorization: Bearer <key>) for compatible third-party proxies that use the
     # ANTHROPIC_AUTH_TOKEN scheme instead of a native Anthropic key.
     auth_style: str = "x-api-key"
     # Optional compatibility paths discovered from provider documentation. Empty
@@ -223,8 +223,7 @@ def doctor_report(config: Config) -> tuple[str, bool]:
 
     if config.art is None:
         lines.append(
-            "[note] no [art] - generate_session_card falls back to the 'openrouter' "
-            "profile (if any) or a local renderer"
+            "[note] no [art] - generate_session_card uses a local renderer"
         )
     else:
         check(

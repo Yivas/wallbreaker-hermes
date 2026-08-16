@@ -206,6 +206,12 @@ def suggest_command(cmd: str, known=KNOWN_COMMANDS) -> str | None:
     return matches[0] if matches else None
 
 
+def _unquote_path(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
 def _parse_command_hints(help_text: str, known) -> dict[str, str]:
     """Map each /command to its one-line hint, harvested from HELP_TEXT.
 
@@ -1248,12 +1254,17 @@ class RthApp(App):
         elif cmd == "/report":
             self._cmd_report(rest)
         elif cmd == "/session":
-            self._cmd_session(rest)
+            session_args = raw_arg.split(maxsplit=1)
+            if len(session_args) == 2:
+                session_args[1] = _unquote_path(session_args[1])
+            self._cmd_session(session_args)
         elif cmd == "/resume":
-            # alias: bare → picker, with a path → load it directly
-            self._cmd_session(["load", *rest])
+            # Use the untouched argument because POSIX shlex consumes Windows backslashes.
+            path = _unquote_path(raw_arg)
+            self._cmd_session(["load", path] if path else ["load"])
         elif cmd == "/save":
-            self._cmd_save(rest)
+            path = _unquote_path(raw_arg)
+            self._cmd_save([path] if path else [])
         else:
             hint = suggest_command(cmd)
             msg = f"unknown command: {cmd}"

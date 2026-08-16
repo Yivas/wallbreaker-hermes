@@ -8,46 +8,28 @@ AGPL-3.0-or-later license.
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License as published by the Free
 Software Foundation, either version 3 of the License, or (at your option) any
-later version. A copy of the License is provided in the LICENSE file in this
-repository. This program is distributed WITHOUT ANY WARRANTY; see the License
-for details.
+later version. A copy of the License is provided in the LICENSE file. This
+program is distributed WITHOUT ANY WARRANTY; see the License for details.
 
-------------------------------------------------------------------------------
-Third-party jailbreak corpora
-------------------------------------------------------------------------------
-Wallbreaker can fetch external red-team libraries AT RUNTIME (they are NOT
-vendored in this repository; `library/` is gitignored):
+Third-party red-team corpora
+----------------------------
 
-  - L1B3RT4S        — https://github.com/elder-plinius/L1B3RT4S
-  - P4RS3LT0NGV3    — https://github.com/elder-plinius/P4RS3LT0NGV3
-  - ENI persona set
+Wallbreaker can fetch these external corpora at runtime. They are not tracked,
+packaged, or redistributed by this repository:
 
-These are the work of their respective authors (notably Pliny / elder-plinius)
-and are governed by their own licenses. Wallbreaker drives them as tools; it does
-not redistribute them. Run `wallbreaker lib update` / `wallbreaker parsel update`
-to fetch them locally.
+- L1B3RT4S: https://github.com/elder-plinius/L1B3RT4S
+- P4RS3LT0NGV3: https://github.com/elder-plinius/P4RS3LT0NGV3
+- ENI: https://github.com/elder-plinius/ENI
+- ZetaLib: https://github.com/Exocija/ZetaLib
+- UltraBr3aks: https://github.com/SlowLow999/UltraBr3aks
 
-------------------------------------------------------------------------------
-Vendored jailbreak corpora (checked into `library/`)
-------------------------------------------------------------------------------
-The following red-team corpora are vendored verbatim under `library/` for
-research use. They carry NO explicit upstream license; all rights remain with
-their original authors. They are included solely for AUTHORIZED red-teaming and
-safety evaluation, are not modified, and are attributed here in full:
+Each corpus remains subject to its own license or terms. `library.lock.toml`
+records the revisions accepted by the integrity gate. Entries marked
+`UNRESOLVED` are blocked from loading until an operator reviews and pins them.
+A revision pin verifies integrity; it does not grant redistribution rights.
 
-  - ZetaLib        — https://github.com/Exocija/ZetaLib
-                     author: Exocija. No explicit license; vendored verbatim
-                     for red-team research, all rights to the original author.
-  - UltraBr3aks    — https://github.com/SlowLow999
-                     author: SlowLow999. No explicit license; vendored verbatim
-                     for red-team research, all rights to the original author.
-  - SlowLow999     — https://github.com/SlowLow999
-                     author: SlowLow999. Companion corpus to UltraBr3aks. No
-                     explicit license; vendored verbatim, all rights to the
-                     original author.
-
-------------------------------------------------------------------------------
 Intended use
-------------------------------------------------------------------------------
-Wallbreaker is a security-research tool for AUTHORIZED LLM red-teaming and
+------------
+
+Wallbreaker is a security-research tool for authorized LLM red-teaming and
 safety evaluation only. See SECURITY.md.

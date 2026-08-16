@@ -125,14 +125,11 @@ def test_resolve_art_endpoint_prefers_explicit_art():
     assert session_card._resolve_art_endpoint(ctx) is art
 
 
-def test_resolve_art_endpoint_falls_back_to_openrouter_profile():
+def test_resolve_art_endpoint_does_not_reuse_openrouter_profile():
     openrouter = Endpoint("openrouter", "openai", "http://or", "gpt-4o-mini", api_key="k")
     cfg = Config(default_profile="openrouter", profiles={"openrouter": openrouter})
     ctx = ToolContext(config=cfg, cwd=".")
-    ep = session_card._resolve_art_endpoint(ctx)
-    assert ep is not None
-    assert ep.modality == "image"
-    assert ep.model == session_card.DEFAULT_ART_MODEL
+    assert session_card._resolve_art_endpoint(ctx) is None
 
 
 def test_resolve_art_endpoint_none_when_nothing_configured():

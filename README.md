@@ -79,8 +79,7 @@ The Python package and commands remain `wallbreaker` and `wb` for upstream compa
   label; `persuasion_attack` (PAP, Zeng 2024) rewrites the ask through 16 persuasion
   strategies concurrently and ranks bypasses; `drattack` (Li 2024) decomposes the
   objective into benign fragments then reassembles; `ica` (Wei 2023) packs N harmful
-  Q/A demos into a single in-context turn. Live at 60% ASR on `deepseek/deepseek-chat`
-  in preliminary measurement — see `CHANGELOG.md`.
+  Q/A demos into a single in-context turn.
 
 
 ## Clone Repository 
@@ -320,9 +319,8 @@ inspection. **Agent** is dedicated to the autonomous Attack → Target → Judge
 ![Wallbreaker attack console](docs/images/dashboard-console.png)
 
 <details>
-<summary>More views: overview &amp; arsenal</summary>
+<summary>More views: arsenal</summary>
 
-![Overview](docs/images/dashboard-overview.png)
 ![Arsenal](docs/images/dashboard-arsenal.png)
 
 </details>
@@ -340,16 +338,16 @@ engine as the TUI. For frontend hot-reload, run `npm run dev` in
 
 See the [setup guide](docs/SETUP.md) for Windows instructions, provider configuration,
 history storage, development workflow, network-exposure safeguards, and troubleshooting.
-See the [WebUI V2 showcase](docs/WEBUI_V2_SHOWCASE.md) for a visual tour of the unified
-operator surface.
+See [Upstream maintenance](docs/UPSTREAM.md) for the update and rollback procedure.
 
 ## Responsible use
 
 Wallbreaker is for **authorized** LLM red-teaming and safety evaluation only: your own
 models, or targets you have explicit permission to test. Run logs and generated
 artifacts can contain harmful content; they're written to gitignored `wb_runs/`,
-`wb_artifacts/`, `findings/`. See [SECURITY.md](SECURITY.md) for the full policy and how
-to report a vulnerability in the harness itself.
+`wb_artifacts/`, and `findings/`. Dataset updates and configured provider calls use the
+network; an optional `[art]` endpoint also receives scorecard labels and results. See
+[SECURITY.md](SECURITY.md) for the full policy and vulnerability-reporting channel.
 
 ## Contributing
 

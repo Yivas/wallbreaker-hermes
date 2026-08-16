@@ -112,9 +112,8 @@ class AnthropicProvider(Provider):
         )
 
     def _auth_headers(self) -> dict:
-        """Request headers. Native Anthropic authenticates with x-api-key; third-party
-        proxies (tokies.cc, etc.) use Authorization: Bearer (the ANTHROPIC_AUTH_TOKEN
-        scheme). endpoint.auth_style='bearer' selects the latter."""
+        """Request headers. Native Anthropic uses x-api-key; compatible third-party
+        proxies may use Authorization: Bearer. endpoint.auth_style='bearer' selects it."""
         headers = {
             "anthropic-version": ANTHROPIC_VERSION,
             "Content-Type": "application/json",

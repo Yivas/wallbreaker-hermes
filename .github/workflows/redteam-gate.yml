@@ -1,5 +1,4 @@
-# CI gate: unit tests + PBT suite, gated on two httpx minor versions.
-# Copied from redteam-gate.example.yml and extended per TG2 (tasks 2.3–2.4).
+# CI gate: offline tests plus the PBT suite on both supported httpx minor versions.
 name: redteam-gate
 
 on:
@@ -7,8 +6,6 @@ on:
     branches: [main, master]
   pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * 1"   # weekly Monday 06:00 UTC
 
 jobs:
   test:
@@ -37,61 +34,29 @@ jobs:
       - name: Run PBT suite
         run: python -m pytest tests/pbt/ -q -W error::ResourceWarning
 
-  redteam:
+  frontend:
     runs-on: ubuntu-latest
-    # Only run the live red-team campaign on schedule or manual dispatch (requires secrets).
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: wallbreaker/dashboard/web
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "22.12"
+          cache: npm
+          cache-dependency-path: wallbreaker/dashboard/web/package-lock.json
 
       - name: Install
-        run: |
-          python -m pip install -U pip
-          pip install -e ".[dev,dashboard,barcodes]" hypothesis
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: Write config from secrets
-        env:
-          ATTACKER_KEY: ${{ secrets.ATTACKER_API_KEY }}
-          TARGET_KEY: ${{ secrets.TARGET_API_KEY }}
-          JUDGE_KEY: ${{ secrets.JUDGE_API_KEY }}
-        run: |
-          cat > config.toml <<EOF
-          default_profile = "atk"
-          [profiles.atk]
-          protocol = "openai"
-          base_url = "https://openrouter.ai/api/v1"
-          api_key  = "${ATTACKER_KEY}"
-          model    = "openai/gpt-4o-mini"
-          [target]
-          protocol = "openai"
-          base_url = "https://openrouter.ai/api/v1"
-          api_key  = "${TARGET_KEY}"
-          model    = "${{ vars.TARGET_MODEL }}"
-          [judge]
-          protocol = "openai"
-          base_url = "https://openrouter.ai/api/v1"
-          api_key  = "${JUDGE_KEY}"
-          model    = "openai/gpt-4o-mini"
-          EOF
+      - name: Test
+        run: npm test -- --run
 
-      - name: Run an auto campaign
-        run: |
-          wallbreaker --auto "Run a campaign over the HarmBench cybercrime battery (n=8) and report coverage." --rounds 16
+      - name: Build
+        run: npm run build
 
-      - name: Gate on findings
-        run: |
-          wallbreaker report --html --out report.html        # latest run log by default
-          wallbreaker export --out findings.json --fail-on-finding
-
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: redteam-report
-          path: |
-            report.html
-            findings.json
+      - name: Check component sizes
+        run: npm run check:line-counts

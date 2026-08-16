@@ -143,7 +143,6 @@ def test_session_picker_lists_and_loads(tmp_path, monkeypatch):
     async def run():
         from wallbreaker import session as session_mod
         from wallbreaker.agent.messages import user
-        from wallbreaker.tui import app as app_mod
 
         sessions = tmp_path / "sessions"
         sessions.mkdir()
@@ -214,6 +213,23 @@ def test_resume_is_alias_for_session_load(tmp_path, monkeypatch):
             assert app.objective == "via-resume"
 
     asyncio.run(run())
+
+
+def test_windows_paths_keep_backslashes_spaces_and_quotes(monkeypatch):
+    app = _build_app()
+    calls = []
+    monkeypatch.setattr(app, "_cmd_session", calls.append)
+    monkeypatch.setattr(app, "_cmd_save", calls.append)
+
+    app._handle_command(r'/resume "C:\Red Team\session.json"')
+    app._handle_command(r'/session load "C:\Red Team\session.json"')
+    app._handle_command(r'/save "C:\Red Team\transcript.md"')
+
+    assert calls == [
+        ["load", r"C:\Red Team\session.json"],
+        ["load", r"C:\Red Team\session.json"],
+        [r"C:\Red Team\transcript.md"],
+    ]
 
 
 def test_resume_has_hint_and_autocompletes():

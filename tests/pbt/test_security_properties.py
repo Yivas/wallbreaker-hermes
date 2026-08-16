@@ -96,12 +96,59 @@ def test_access_control_invariant(tmp_path, token, origin, method):
 # Security Property 10 — Token file 0600 (SEC-1)
 # ===========================================================================
 
-def test_token_file_is_0600(tmp_path):
+def _windows_saved_sddl(path, acl_file):
+    import subprocess
+
+    subprocess.run(
+        ["icacls", str(path), "/save", str(acl_file), "/c"],
+        check=True,
+        capture_output=True,
+    )
+    return acl_file.read_text(encoding="utf-16-le")
+
+
+def _assert_windows_private_sddl(sddl):
+    import re
+
+    from wallbreaker.dashboard.auth import _windows_current_sid
+
+    assert "D:P" in sddl
+    principals = set(re.findall(r";;;([^)]+)\)", sddl))
+    assert principals == {_windows_current_sid(), "SY", "BA"}
+
+
+def test_token_file_is_private(tmp_path):
     from wallbreaker.dashboard.auth import ensure_launch_token, token_file_path
+
     tok = ensure_launch_token(str(tmp_path))
-    mode = os.stat(token_file_path(str(tmp_path))).st_mode & 0o777
-    assert mode == 0o600, f"token file mode {oct(mode)} != 0o600"
+    path = token_file_path(str(tmp_path))
+    assert path.read_text(encoding="utf-8") == tok
+    if os.name == "nt":
+        sddl = _windows_saved_sddl(path, tmp_path / "new-acl.txt")
+        _assert_windows_private_sddl(sddl)
+    else:
+        mode = os.stat(path).st_mode & 0o777
+        assert mode == 0o600, f"token file mode {oct(mode)} != 0o600"
     assert len(tok) > 20
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows DACL regression")
+def test_existing_windows_token_dacl_is_replaced(tmp_path):
+    import subprocess
+
+    from wallbreaker.dashboard.auth import ensure_launch_token, token_file_path
+
+    path = token_file_path(tmp_path)
+    path.write_text("old", encoding="utf-8")
+    subprocess.run(
+        ["icacls", str(path), "/grant", "*S-1-1-0:(F)"],
+        check=True,
+        capture_output=True,
+    )
+
+    ensure_launch_token(tmp_path)
+    sddl = _windows_saved_sddl(path, tmp_path / "existing-acl.txt")
+    _assert_windows_private_sddl(sddl)
 
 
 # ===========================================================================

@@ -56,6 +56,7 @@ def resolve(endpoint, cwd: str = ".") -> tuple[str | None, str | None]:
     override = getattr(endpoint, "jailbreak_file", "") or ""
     if override:
         path = override if os.path.isabs(override) else os.path.join(os.path.abspath(cwd or "."), override)
+        path = os.path.normpath(path)
         text = _read(path)
         if text is not None:
             return text, path
@@ -78,5 +79,6 @@ def expected_path(endpoint, cwd: str = ".") -> str:
     """Where to drop this model's jailbreak file (the override if set, else canonical)."""
     override = getattr(endpoint, "jailbreak_file", "") or ""
     if override:
-        return override if os.path.isabs(override) else os.path.join(os.path.abspath(cwd or "."), override)
+        path = override if os.path.isabs(override) else os.path.join(os.path.abspath(cwd or "."), override)
+        return os.path.normpath(path)
     return canonical_path(cwd, getattr(endpoint, "model", "") or "")

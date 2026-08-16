@@ -28,11 +28,19 @@ sensitive data.
 
 ## Hermes runtime mode
 
-The planned Hermes mode will run only against an ephemeral, explicitly authorized target home.
-It must exclude credentials, sessions, channels, logs, caches, and real gateway state; constrain
-filesystem, tools, and network; compare state before and after each repetition; and destroy the
-sandbox on every exit path. Until those controls ship and are verified, do not treat a copied
-Hermes directory as a security sandbox.
+The Hermes laboratory runs only against an ephemeral, explicitly authorized target home. It
+excludes credentials, sessions, channels, logs, caches, and real gateway state; denies target
+tools and MCP; compares state before and after each repetition; and destroys the temporary home
+on every exit path. The native child process retains the host account's filesystem and network
+permissions, so the laboratory is not an operating-system sandbox.
+
+## External connections
+
+Provider, target, judge, dataset download, corpus update, and provider-verification actions use
+network connections only when the operator invokes or configures them. Session cards render
+locally unless an `[art]` endpoint is configured; that endpoint receives the target label,
+behavior labels, scores, and technique names needed to render the card. Do not configure it for
+sensitive engagements.
 
 ## Reporting a vulnerability in Wallbreaker Hermes itself
 

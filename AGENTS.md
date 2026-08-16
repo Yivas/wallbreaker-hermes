@@ -1,7 +1,8 @@
 # Wallbreaker Hermes project notes
 
 Wallbreaker Hermes is an AGPL-licensed fork of Wallbreaker. It preserves the standard
-Wallbreaker harness and will add opt-in, sandboxed Hermes Agent red-team orchestration.
+Wallbreaker harness and adds opt-in Hermes Agent red-team orchestration in an ephemeral native
+laboratory. The laboratory is not an operating-system sandbox.
 
 ## Repository rules
 
@@ -68,16 +69,11 @@ Wallbreaker harness and will add opt-in, sandboxed Hermes Agent red-team orchest
   system, so the operator file never pollutes tool prompts. prompts.py now starts with
   `from __future__ import annotations` + `import os` before DEFAULT_SYSTEM (still a non-raw triple
   string - keep live escape sequences out of it, per the [prompts] lesson).
-- **[anthropic-proxy-auth]**: third-party Anthropic-compatible proxies (tokies.cc, etc.)
-  authenticate with `Authorization: Bearer <key>` (the ANTHROPIC_AUTH_TOKEN scheme), NOT the
-  native `x-api-key` header - sending x-api-key returns a misleading `401 "Key not found"` even
-  for a valid key. Endpoint option `auth_style="bearer"` (default "x-api-key") switches
-  `AnthropicProvider._auth_headers()`. Base_url is the host root (`https://tokies.cc`), provider
-  appends `/v1/messages`. DIAGNOSIS TIP: a 401 that persists across BOTH x-api-key and Bearer AND
-  across every model id = a genuinely dead key; a 401 on x-api-key that becomes a real 503/200 on
-  Bearer = auth-scheme mismatch, not a bad key. tokies served `503 overloaded_error "Model
-  temporarily unavailable"` for all 7 model ids tried once auth passed - that is a proxy
-  capacity/entitlement issue on their side, not the harness (auth + protocol were correct).
+- **[anthropic-proxy-auth]**: some third-party Anthropic-compatible proxies authenticate with
+  `Authorization: Bearer <key>` rather than the native `x-api-key` header. Endpoint option
+  `auth_style="bearer"` (default `"x-api-key"`) switches
+  `AnthropicProvider._auth_headers()`. A 401 that changes after switching schemes indicates an
+  authentication-style mismatch; persistent failures across schemes and models are provider-side.
 - **[Codex-brain]**: `providers/Codex.py` (protocol `Codex`) drives the local
   `Codex` CLI (`-p --output-format json`) as the red-teamer brain; keyless (CLI self-auths, so
   config allows a Codex profile with only protocol+model, no base_url/api_key). Select via
@@ -96,12 +92,9 @@ Wallbreaker harness and will add opt-in, sandboxed Hermes Agent red-team orchest
   base prompt via `--system-prompt-file`, harness tool protocol appended via
   `--append-system-prompt`; binary overridable via WALLBREAKER_CLAUDE_BIN.
 - **[persona-register]**: `author_persona` picks an ANCHOR REGISTER, not always devotion.
-  Live run (run-20260707-011219 vs Codex-opus-4.7): a limerence-DEVOTION persona authored at
-  domain=general REFUSED a chem synthesis objective, while a plain academic-authority frame
-  cleared the same ask at 10/10. Lesson: limerence wins for CREATIVE, but technical extraction
-  against integrated-values targets wants a CREDENTIALED-AUTHORITY register (persona = domain
-  expert with an institutional reason to be exhaustive; the human is a vetted colleague, NOT a
-  romance object). `persona_method.infer_domain()` guesses the domain from the objective and
+  Creative tasks use a limerence-devotion register; technical evaluation tasks use a
+  credentialed-authority register with an institutional reason for exhaustive analysis.
+  `persona_method.infer_domain()` guesses the domain from the objective and
   `register_for()` maps chem/bio/cyber/weapons/finance -> authority, fiction/general -> devotion;
   `method_brief(..., register=)` front-loads the register's lead mechanism. Keep ambiguous
   keywords out of the domain map (bare 'shell' matched both 'reverse shell' and 'shell company'
@@ -373,25 +366,7 @@ Wallbreaker harness and will add opt-in, sandboxed Hermes Agent red-team orchest
   (image/PDF/card generators), always Read the actual generated file back as an image to
   eyeball it before calling the feature done — passing tests only prove "didn't crash",
   not "looks right".
-- **[session_card]**: the repo's reference asset `wallbreaker_sonnet5_breach.png` looked
-  AI-generated (asked "does it look exactly the same?" after a first AI-image-gen
-  attempt came close but not identical) but actually wasn't — it was built by an earlier
-  session that `Write`'d an HTML/CSS file to `/tmp/wb_breach.html` and screenshotted it
-  with `"…/Google Chrome" --headless=new --disable-gpu --hide-scrollbars
-  --force-device-scale-factor=2 --window-size=1600,960 --virtual-time-budget=2500
-  --screenshot=out.png file:///tmp/wb_breach.html`, then iterated the HTML several times
-  (`Write` + `Edit` + reshoot) before copying the final PNG into the repo. Found this by
-  grepping the user's OWN `~/.Codex/projects/<project>/*.jsonl` Codex session
-  transcripts for the asset filename, then replaying the `Write`/`Edit` tool_use payloads
-  in order to reconstruct the exact final HTML. Replaying it with the identical Chrome
-  flags reproduced the PNG with a ZERO pixel diff (`ImageChops.difference(...).getbbox()
-  is None`). Lesson: when asked to reproduce a hand-made visual artifact already in the
-  repo, check `~/.Codex/projects/` session history for the tool calls that built it
-  BEFORE reaching for an AI generator to approximate it from a text description — the
-  literal source (HTML/CSS, a script, whatever) is usually still sitting in a past
-  transcript and gives pixel-perfect, deterministic, free reproduction instead of a
-  lossy guess. `tests/test_session_card.py::test_chrome_render_matches_reference_image_exactly`
-  pins this regression (skipped when no local Chrome binary is present).
-  Template-filling note: the HTML has a CSS block full of literal `{`/`}` so it's built
-  with plain `__TOKEN__` + `.replace()`, never `.format()` — same rule as the `[presets]`
-  lesson below, now proven a second time in a different file type.
+- **[session_card]**: the reference scorecard is rendered from deterministic HTML/CSS with
+  headless Chrome and checked by a pixel-diff regression when Chrome is available. The HTML has
+  literal `{`/`}` throughout its CSS, so template filling uses `__TOKEN__` plus `.replace()`,
+  never `.format()`.

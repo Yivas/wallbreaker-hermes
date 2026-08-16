@@ -278,12 +278,12 @@ def test_conversation_render_labels_roles_and_tool_results():
     assert "TOOL_RESULT [cc_0]" in convo and "permissive target" in convo
 
 
-# ---- anthropic bearer auth (tokies.cc-style proxies) -------------------------
+# ---- anthropic bearer auth ---------------------------------------------------
 
 def test_anthropic_bearer_auth_header():
     from wallbreaker.providers.anthropic_provider import AnthropicProvider
     from wallbreaker.config import Endpoint
-    ep = Endpoint(name="tok", protocol="anthropic", base_url="https://tokies.cc",
+    ep = Endpoint(name="tok", protocol="anthropic", base_url="https://proxy.example",
                   api_key="sk-xyz", model="claude-opus-4-8", auth_style="bearer")
     h = AnthropicProvider(ep)._auth_headers()
     assert h["Authorization"] == "Bearer sk-xyz"
@@ -302,7 +302,7 @@ def test_anthropic_default_uses_x_api_key():
 
 def test_config_parses_auth_style():
     from wallbreaker.config import _endpoint_from_table
-    ep = _endpoint_from_table("tok", {"protocol": "anthropic", "base_url": "https://tokies.cc",
+    ep = _endpoint_from_table("tok", {"protocol": "anthropic", "base_url": "https://proxy.example",
                                        "model": "claude-opus-4-8", "auth_style": "bearer"})
     assert ep.auth_style == "bearer"
 

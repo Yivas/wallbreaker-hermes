@@ -143,10 +143,9 @@ api_key_env = "OPENROUTER_API_KEY"
 model = "openai/gpt-4o-mini"
 
 # Optional: a dedicated image-generation endpoint used ONLY by generate_session_card to
-# render a branded "session card" PNG (target/score table) when finish() wraps up an
-# engagement. If omitted, the harness falls back to the 'openrouter' profile (pinned to a
-# default image model) and, if that has no key either, to a local Pillow-rendered card -
-# every session still gets a saved image either way.
+# render a branded "session card" PNG when finish() wraps up an engagement. Configuring
+# this endpoint opts into sending the target label, behavior labels, scores, and technique
+# names to that provider. If omitted, cards render locally with Chrome or Pillow.
 # [art]
 # protocol = "openai"
 # modality = "image"

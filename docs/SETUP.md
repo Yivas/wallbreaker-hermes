@@ -8,7 +8,7 @@ explicit permission to evaluate.
 
 - Python 3.11 or newer
 - Git
-- Node.js 18 or newer and npm, if you want the browser interface
+- Node.js 22.12 or newer and npm, if you want the browser interface
 - Credentials for the model providers you intend to use, unless you use a supported
   keyless local CLI provider
 
@@ -94,7 +94,7 @@ Install the frontend dependencies and create the production bundle:
 
 ```bash
 cd wallbreaker/dashboard/web
-npm install
+npm ci
 npm run build
 cd ../../..
 ```
@@ -161,7 +161,10 @@ Run the Python suite with the project environment and build the frontend:
 ```bash
 python -m pytest tests
 cd wallbreaker/dashboard/web
+npm ci
+npm test -- --run
 npm run build
+npm run check:line-counts
 ```
 
 The full Python suite needs the project environment because the TUI, dashboard, image,

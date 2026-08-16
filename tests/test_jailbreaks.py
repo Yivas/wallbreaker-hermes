@@ -54,3 +54,11 @@ def test_expected_path_uses_override(tmp_path):
     assert expected_path(ep, str(tmp_path)).endswith(os.path.join("jb", "custom.md"))
     ep2 = _ep("x-ai/grok-4.3")
     assert expected_path(ep2, str(tmp_path)).endswith(os.path.join("x-ai", "grok-4.3.md"))
+
+
+def test_override_path_is_normalized(tmp_path):
+    override = os.path.join("jb", "nested", "..", "custom.md")
+    ep = _ep("x-ai/grok-4.3", jailbreak_file=override)
+    assert expected_path(ep, str(tmp_path)) == os.path.normpath(
+        os.path.join(str(tmp_path), "jb", "custom.md")
+    )

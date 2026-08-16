@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-import os
 import threading
 from pathlib import Path
 
@@ -14,7 +13,7 @@ STATE_FILENAME = ".wallbreaker_state.json"
 _log = logging.getLogger("wallbreaker.state")
 
 # Serialize read-modify-write within a single process (dashboard + TUI can both write the
-# shared flat-namespace state file — see the [state] lesson in CLAUDE.md). Cross-process
+# shared flat-namespace state file). Cross-process
 # safety comes from the atomic os.replace in _atomic_write below (a reader always sees a
 # whole old or whole new file, never a torn/empty one).
 _state_lock = threading.RLock()

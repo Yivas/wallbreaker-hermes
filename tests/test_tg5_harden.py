@@ -104,11 +104,14 @@ class TestSecurityMiddlewareParity:
 # 5.1 — Behavioral parity: token file 0600 via re-export
 # ---------------------------------------------------------------------------
 
-def test_ensure_launch_token_writes_0600(tmp_path):
+def test_ensure_launch_token_writes_private_file(tmp_path):
     from agent_dashboard_harden import ensure_launch_token, token_file_path
-    ensure_launch_token(tmp_path)
-    mode = stat.S_IMODE(os.stat(token_file_path(tmp_path)).st_mode)
-    assert mode == 0o600
+
+    token = ensure_launch_token(tmp_path)
+    path = token_file_path(tmp_path)
+    assert path.read_text(encoding="utf-8") == token
+    if os.name != "nt":
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +194,6 @@ class TestPbtFixturesModule:
         assert callable(fn)
 
     def test_input_validation_factory_returns_callable(self):
-        from agent_dashboard_harden import EgressBlocked
         from agent_dashboard_harden.pbt_fixtures import make_input_validation_property
 
         def validate(url):
