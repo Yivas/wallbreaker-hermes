@@ -23,6 +23,11 @@
   that corpus.
 - Added explicit property-based tests and clean wheel installation to the release workflow.
 
+### Security
+
+- Updated Vite to 6.4.3, Vitest to 3.2.7, h2 to 4.4.1, and cryptography to 50.0.0 before
+  publication to close the open advisories affecting the locked development and runtime graph.
+
 ### Compatibility
 
 - Existing report v2 files remain structurally verifiable. Reports created before private sidecars
