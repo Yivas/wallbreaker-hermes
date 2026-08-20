@@ -36,6 +36,22 @@
 - The Hermes Agent baseline remains `v2026.8.13`, package `0.20.1`, commit
   `f80f453ae0679347e38abc917c7f94f717bf96c5`.
 
+### Verification
+
+- Python: 1,550 passed, 57 skipped, 31 xfailed; PBT: 21 passed, 1 skipped.
+- Frontend: 60 tests plus TypeScript/Vite build and component-size checks passed.
+- Wheel and sdist passed artifact inspection, `twine check`, and clean installation outside the
+  checkout.
+- GitHub reported no open Dependabot alerts for the frozen dependency graph.
+
+### Upgrade
+
+```text
+pip install --upgrade wallbreaker-hermes==0.3.0
+```
+
+Compare: `https://github.com/Yivas/wallbreaker-hermes/compare/v0.2.2...v0.3.0`.
+
 ## 0.2.2 - 2026-08-16
 
 This is the first published `wallbreaker-hermes` distribution. The `v0.2.0` and `v0.2.1`
