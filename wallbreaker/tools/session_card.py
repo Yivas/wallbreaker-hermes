@@ -38,7 +38,7 @@ _CARD_BASE_HEIGHT_CSS = 960
 _CARD_BASE_ROWS = 10
 _CARD_ROW_CSS_H = 23
 _CARD_SCALE = 2
-_CHROME_TIMEOUT = 20.0
+_CHROME_TIMEOUT = 60.0
 
 _FONT_BOLD = (
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
