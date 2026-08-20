@@ -30,6 +30,7 @@ wb_stego/
 wb_work/
 findings/
 sessions/
+*.evidence.json
 
 # vendored third-party clones (their own git repos — not part of this repo)
 awesome-osint-arsenal/

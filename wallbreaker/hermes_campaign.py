@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import csv
 import hashlib
 import hmac
 import json
@@ -9,11 +10,15 @@ import math
 import os
 import re
 import secrets
+import stat
+import subprocess
+import tempfile
 import threading
 from contextlib import contextmanager
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import lru_cache
 from pathlib import Path
 from typing import Mapping
 
@@ -32,10 +37,12 @@ from .hermes_lab import (
     HERMES_STATE_PATHS,
     CleanupReceipt,
     HermesLabResult,
+    _open_no_follow,
     fingerprint_manifest_context,
     validate_hermes_runtime,
 )
 from .judging import judge_reply
+from .providers.base import ProviderError
 from .providers.factory import build_provider
 from .session import RunLog, inference_logging
 from .tools.control import register as register_control
@@ -46,9 +53,15 @@ from .transforms import TRANSFORMS, apply_chain, decode_chain
 SUITE_SCHEMA = "wallbreaker.hermes-campaign-suite/v1"
 REPORT_SCHEMA = "wallbreaker.hermes-campaign-report/v2"
 PLAN_SCHEMA = "wallbreaker.hermes-campaign-plan/v2"
+REVIEW_EVIDENCE_SCHEMA = "wallbreaker.hermes-campaign-evidence/v1"
 EVIDENCE_KEY_ENV = "WALLBREAKER_HERMES_EVIDENCE_KEY"
 _MAX_SUITE_BYTES = 256 * 1024
 _MAX_REPORT_BYTES = 16 * 1024 * 1024
+_MAX_REVIEW_EVIDENCE_BYTES = 64 * 1024 * 1024
+_MAX_REVIEW_OBJECTIVE_BYTES = 64 * 1024
+_MAX_REVIEW_PROMPT_BYTES = 64 * 1024
+_MAX_REVIEW_RESPONSE_BYTES = 256 * 1024
+_REVIEW_RECORD_OVERHEAD_BYTES = 2048
 _MAX_NETWORK_REQUESTS = 1000
 _ID_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?")
 _PATH_COMPONENTS = {
@@ -189,6 +202,13 @@ def _fingerprint(value) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _json_text_size(value: str) -> int:
+    try:
+        return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, UnicodeEncodeError) as exc:
+        raise CampaignError("Campaign private evidence text must be valid UTF-8.") from exc
+
+
 def _evidence_key() -> bytes:
     key = os.environ.get(EVIDENCE_KEY_ENV, "").encode("utf-8")
     if len(key) < 32:
@@ -209,6 +229,185 @@ def _private_fingerprint(domain: str, value, fingerprint_salt: str) -> str:
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     payload = domain.encode("ascii") + b"\0" + salt + encoded.encode("utf-8")
     return hmac.new(_evidence_key(), payload, hashlib.sha256).hexdigest()
+
+
+def campaign_evidence_path(report_path: str | Path) -> Path:
+    path = Path(report_path)
+    return path.with_suffix(path.suffix + ".evidence.json")
+
+
+@lru_cache(maxsize=1)
+def _windows_current_sid() -> str:
+    whoami = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "whoami.exe"
+    try:
+        result = subprocess.run(
+            [str(whoami), "/user", "/fo", "csv", "/nh"],
+            check=True,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CampaignError("Current Windows identity could not be resolved.") from exc
+    row = next(csv.reader([result.stdout.strip()]), [])
+    sid = row[1].strip() if len(row) > 1 else ""
+    if re.fullmatch(r"S-\d-\d+(?:-\d+)+", sid) is None:
+        raise CampaignError("Current Windows identity could not be resolved.")
+    return sid
+
+
+def _windows_private_fd(path: Path) -> int:
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class SecurityAttributes(ctypes.Structure):
+        _fields_ = [
+            ("nLength", wintypes.DWORD),
+            ("lpSecurityDescriptor", wintypes.LPVOID),
+            ("bInheritHandle", wintypes.BOOL),
+        ]
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    descriptor = wintypes.LPVOID()
+    convert = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
+    convert.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPVOID),
+        wintypes.LPVOID,
+    ]
+    convert.restype = wintypes.BOOL
+    sddl = f"D:P(A;;FA;;;{_windows_current_sid()})(A;;FA;;;SY)(A;;FA;;;BA)"
+    if not convert(sddl, 1, ctypes.byref(descriptor), None):
+        raise CampaignError("Campaign private evidence permissions could not be secured.")
+    attributes = SecurityAttributes(ctypes.sizeof(SecurityAttributes), descriptor, False)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(SecurityAttributes),
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    try:
+        handle = create_file(str(path), 0x40000000, 0, ctypes.byref(attributes), 1, 0x80, None)
+        if handle == wintypes.HANDLE(-1).value:
+            raise CampaignError("Campaign private evidence file could not be created securely.")
+        try:
+            return msvcrt.open_osfhandle(handle, os.O_WRONLY | getattr(os, "O_BINARY", 0))
+        except Exception:
+            kernel32.CloseHandle(handle)
+            raise
+    finally:
+        kernel32.LocalFree(descriptor)
+
+
+def _fsync_parent(path: Path) -> None:
+    if os.name == "nt":
+        return
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_private_json(path: Path, value: dict) -> None:
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+    if len(payload) > _MAX_REVIEW_EVIDENCE_BYTES:
+        raise CampaignError("Campaign private evidence exceeds 67108864 bytes.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        temporary_path = path.parent / f".wb-private-{secrets.token_hex(16)}.tmp"
+        fd = _windows_private_fd(temporary_path)
+    else:
+        fd, temporary = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".wb-private-", suffix=".tmp"
+        )
+        temporary_path = Path(temporary)
+        os.fchmod(fd, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        _fsync_parent(path)
+        if os.name != "nt" and stat.S_IMODE(path.stat().st_mode) != 0o600:
+            raise CampaignError("Campaign private evidence permissions are not private.")
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            temporary_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _open_campaign_file(path: Path) -> int:
+    if os.name == "nt":
+        return _open_no_follow(path)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    try:
+        return os.open(path, flags)
+    except OSError as exc:
+        raise CampaignError("Campaign artifact could not be opened safely.") from exc
+
+
+def _read_private_json(path: Path) -> dict:
+    descriptor = None
+    try:
+        descriptor = _open_campaign_file(path)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise CampaignError("Campaign private evidence must be one regular private file.")
+        if os.name != "nt" and stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise CampaignError("Campaign private evidence permissions are not private.")
+        if metadata.st_size > _MAX_REVIEW_EVIDENCE_BYTES:
+            raise CampaignError("Campaign private evidence exceeds 67108864 bytes.")
+        chunks = []
+        remaining = _MAX_REVIEW_EVIDENCE_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > _MAX_REVIEW_EVIDENCE_BYTES:
+            raise CampaignError("Campaign private evidence exceeds 67108864 bytes.")
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_json_mapping,
+            parse_constant=_reject_json_constant,
+        )
+    except CampaignError:
+        raise
+    except (
+        OSError,
+        ProviderError,
+        UnicodeDecodeError,
+        UnicodeEncodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise CampaignError("Campaign private evidence is not valid UTF-8 JSON.") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def confirmation_fingerprint_salt(token: str | None) -> str | None:
@@ -310,9 +509,19 @@ def _load_case(value) -> CampaignCase:
     case_id = _validated_id(value["id"], "case")
     objective = value["objective"]
     prompt = value["prompt"]
-    if not isinstance(objective, str) or not objective.strip() or len(objective) > 16000:
+    if (
+        not isinstance(objective, str)
+        or not objective.strip()
+        or len(objective) > 16000
+        or _json_text_size(objective) > _MAX_REVIEW_OBJECTIVE_BYTES
+    ):
         raise CampaignError(f"Campaign case {case_id} has an invalid objective.")
-    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 16000:
+    if (
+        not isinstance(prompt, str)
+        or not prompt.strip()
+        or len(prompt) > 16000
+        or _json_text_size(prompt) > _MAX_REVIEW_PROMPT_BYTES
+    ):
         raise CampaignError(f"Campaign case {case_id} has an invalid prompt.")
     try:
         split = Split(value["split"])
@@ -538,15 +747,22 @@ def build_campaign_plan(
     settings = settings or CampaignSettings()
     attacker_endpoint = attacker_endpoint or config.profile()
     path = Path(output_path)
+    evidence_path = campaign_evidence_path(path)
     existing_report = None
     if resume:
         if not path.is_file():
             raise CampaignError("Campaign resume output does not exist.")
+        existing_report = load_campaign_report(path)
+        if evidence_path.exists() or evidence_path.is_symlink():
+            load_campaign_evidence(path, existing_report)
+        elif _report_fire_count(existing_report):
+            raise CampaignError(
+                "Campaign report predates private review evidence and cannot be safely resumed."
+            )
         if fingerprint_salt is None:
-            existing_report = load_campaign_report(path)
             fingerprint_salt = existing_report["fingerprint_salt"]
-    elif path.exists():
-        raise CampaignError("Campaign output already exists; use --resume.")
+    elif path.exists() or evidence_path.exists():
+        raise CampaignError("Campaign output or private evidence already exists; use --resume.")
     fingerprint_salt = _validate_fingerprint_salt(
         fingerprint_salt or secrets.token_hex(32)
     )
@@ -578,6 +794,14 @@ def build_campaign_plan(
     maximum_network_requests = attacker_requests + target_requests + judge_requests
     if maximum_network_requests > _MAX_NETWORK_REQUESTS:
         raise CampaignError("Campaign limits exceed 1000 known network requests.")
+    maximum_private_evidence_bytes = target_requests * (
+        _MAX_REVIEW_OBJECTIVE_BYTES
+        + _MAX_REVIEW_PROMPT_BYTES
+        + _MAX_REVIEW_RESPONSE_BYTES
+        + _REVIEW_RECORD_OVERHEAD_BYTES
+    )
+    if maximum_private_evidence_bytes > _MAX_REVIEW_EVIDENCE_BYTES:
+        raise CampaignError("Campaign limits exceed the private evidence budget.")
     plan = {
         "schema": PLAN_SCHEMA,
         "versions": {
@@ -610,6 +834,7 @@ def build_campaign_plan(
         },
         "maximum_network_requests": maximum_network_requests,
         "maximum_hermes_processes": target_requests * 2,
+        "maximum_private_evidence_bytes": maximum_private_evidence_bytes,
     }
     confirmation = _private_fingerprint("confirmation", plan, fingerprint_salt)
     return {
@@ -705,6 +930,14 @@ def _initial_report(
 
 def _latest(repetition: dict) -> dict:
     return repetition["attempts"][-1]
+
+
+def _report_fire_count(report: dict) -> int:
+    return sum(
+        len(attempt["fires"])
+        for repetition in report["repetitions"]
+        for attempt in repetition["attempts"]
+    )
 
 
 def _combine_assessments(values) -> Assessment:
@@ -864,6 +1097,7 @@ def _register_target(
     on_invocation_unverified: Callable[[CleanupReceipt | None], None] | None = None,
     before_fire: Callable[[], None] | None = None,
     fingerprint_salt: str | None = None,
+    on_private_fire: Callable[[dict, dict], None] | None = None,
 ) -> None:
     fingerprint_salt = _validate_fingerprint_salt(
         fingerprint_salt or secrets.token_hex(32)
@@ -874,6 +1108,8 @@ def _register_target(
         prompt = args.get("prompt", "")
         if not isinstance(prompt, str) or not prompt:
             return "Error: 'prompt' is required"
+        if _json_text_size(prompt) > _MAX_REVIEW_PROMPT_BYTES:
+            return "Error: prompt exceeds the private evidence limit"
         transforms = args.get("transforms", [])
         if isinstance(transforms, str):
             transforms = [item.strip() for item in transforms.split(",") if item.strip()]
@@ -890,6 +1126,8 @@ def _register_target(
         ):
             return "Error: unsupported response transform"
         sent_prompt = apply_chain(prompt, transforms) if transforms else prompt
+        if _json_text_size(sent_prompt) > _MAX_REVIEW_PROMPT_BYTES:
+            return "Error: transformed prompt exceeds the private evidence limit"
         if before_fire is not None:
             before_fire()
         nonlocal target_invocations
@@ -928,11 +1166,18 @@ def _register_target(
         if on_invocation_closed is not None:
             on_invocation_closed(result.cleanup)
         response = result.text
+        if _json_text_size(response) > _MAX_REVIEW_RESPONSE_BYTES:
+            raise CampaignError("Campaign response exceeds the private evidence limit.")
         transform_status = "not_requested"
         transform_error_type = None
         if response_transforms:
             try:
-                response = decode_chain(response, response_transforms)
+                decoded_response = decode_chain(response, response_transforms)
+                if _json_text_size(decoded_response) > _MAX_REVIEW_RESPONSE_BYTES:
+                    raise CampaignError(
+                        "Transformed response exceeds the private evidence limit."
+                    )
+                response = decoded_response
                 transform_status = "passed"
             except Exception as exc:
                 transform_status = "failed"
@@ -942,6 +1187,15 @@ def _register_target(
                 "status": transform_status,
                 "error_type": transform_error_type,
             }
+            if on_private_fire is not None:
+                on_private_fire(
+                    fire,
+                    {
+                        "objective": case.objective,
+                        "prompt": sent_prompt,
+                        "response": response,
+                    },
+                )
             fires.append(fire)
             if on_fire is not None:
                 on_fire(fire)
@@ -1001,6 +1255,7 @@ async def _run_repetition(
     before_fire: Callable[[], None] | None = None,
     attacker_system: str | None = None,
     fingerprint_salt: str | None = None,
+    on_private_fire: Callable[[dict, dict], None] | None = None,
 ) -> tuple[str, Assessment, list[dict]]:
     fires: list[dict] = []
     fire_limit_reached = False
@@ -1044,6 +1299,7 @@ async def _run_repetition(
         mark_unverified_invocation,
         check_plan,
         fingerprint_salt,
+        on_private_fire,
     )
     register_control(registry)
     attacker = build_provider(attacker_endpoint)
@@ -1084,11 +1340,78 @@ def _cleanup_data(receipt: CleanupReceipt) -> dict:
 
 def _write_report(path: Path, report: dict) -> None:
     atomic_write(path, json.dumps(report, indent=2, sort_keys=True) + "\n")
+    _fsync_parent(path)
+
+
+def _validate_output_artifact(path: Path) -> None:
+    if path.is_symlink():
+        raise CampaignError("Campaign output paths cannot be links.")
+    if not path.exists():
+        return
+    descriptor = None
+    try:
+        descriptor = _open_campaign_file(path)
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise CampaignError("Campaign output must be one standalone regular file.")
+    except ProviderError as exc:
+        raise CampaignError("Campaign output paths cannot be links.") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _open_lock_descriptor(path: Path) -> int:
+    if os.name != "nt":
+        flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
+        return os.open(path, flags, 0o600)
+
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class FileAttributeTagInfo(ctypes.Structure):
+        _fields_ = [
+            ("file_attributes", wintypes.DWORD),
+            ("reparse_tag", wintypes.DWORD),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    handle = create_file(str(path), 0xC0000000, 0x7, None, 4, 0x00200080, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise CampaignError("Campaign output lock could not be created.")
+    try:
+        info = FileAttributeTagInfo()
+        if not kernel32.GetFileInformationByHandleEx(
+            handle, 9, ctypes.byref(info), ctypes.sizeof(info)
+        ) or info.file_attributes & 0x00000400:
+            raise CampaignError("Campaign output lock cannot be a reparse point.")
+        return msvcrt.open_osfhandle(
+            handle,
+            os.O_RDWR | getattr(os, "O_BINARY", 0),
+        )
+    except Exception:
+        kernel32.CloseHandle(handle)
+        raise
 
 
 @contextmanager
 def _campaign_output_lock(path: Path):
-    key = path.resolve()
+    canonical_parent = path.parent.resolve()
+    key = canonical_parent / path.name
+    _validate_output_artifact(path)
+    _validate_output_artifact(campaign_evidence_path(path))
     with _OUTPUTS_LOCK:
         if key in _ACTIVE_OUTPUTS:
             raise CampaignError("Campaign output is already in use.")
@@ -1096,11 +1419,16 @@ def _campaign_output_lock(path: Path):
     handle = None
     locked = False
     try:
-        lock_path = path.with_suffix(path.suffix + ".lock")
+        lock_path = key.with_suffix(key.suffix + ".lock")
         try:
             lock_path.parent.mkdir(parents=True, exist_ok=True)
-            handle = open(lock_path, "a+b")
-        except OSError as exc:
+            descriptor = _open_lock_descriptor(lock_path)
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                os.close(descriptor)
+                raise CampaignError("Campaign output lock must be one regular file.")
+            handle = os.fdopen(descriptor, "r+b")
+        except (OSError, ProviderError) as exc:
             raise CampaignError("Campaign output lock could not be created.") from exc
         if handle.seek(0, os.SEEK_END) == 0:
             handle.write(b"\0")
@@ -1118,7 +1446,9 @@ def _campaign_output_lock(path: Path):
         except OSError as exc:
             raise CampaignError("Campaign output is already in use.") from exc
         locked = True
-        yield
+        _validate_output_artifact(path)
+        _validate_output_artifact(campaign_evidence_path(path))
+        yield key
     finally:
         if handle is not None:
             if locked:
@@ -1282,13 +1612,25 @@ def _reject_json_constant(value: str):
 
 
 def load_campaign_report(path: str | Path) -> dict:
+    descriptor = None
     try:
-        raw = Path(path).read_bytes()
-    except OSError as exc:
-        raise CampaignError("Campaign report could not be read.") from exc
-    if len(raw) > _MAX_REPORT_BYTES:
-        raise CampaignError("Campaign report exceeds 16777216 bytes.")
-    try:
+        descriptor = _open_campaign_file(Path(path))
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise CampaignError("Campaign report must be one standalone regular file.")
+        if metadata.st_size > _MAX_REPORT_BYTES:
+            raise CampaignError("Campaign report exceeds 16777216 bytes.")
+        chunks = []
+        remaining = _MAX_REPORT_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(64 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > _MAX_REPORT_BYTES:
+            raise CampaignError("Campaign report exceeds 16777216 bytes.")
         report = json.loads(
             raw.decode("utf-8"),
             object_pairs_hook=_unique_json_mapping,
@@ -1297,8 +1639,19 @@ def load_campaign_report(path: str | Path) -> dict:
         return validate_campaign_report(report)
     except CampaignError:
         raise
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, TypeError, ValueError) as exc:
+    except (
+        OSError,
+        ProviderError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise CampaignError("Campaign report is not valid UTF-8 JSON.") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def validate_campaign_report(report: dict) -> dict:
@@ -1836,6 +2189,188 @@ def campaign_verification_issues(report: dict) -> tuple[str, ...]:
     return tuple(dict.fromkeys(issues))
 
 
+def _review_report_identity(report: dict) -> dict:
+    return {
+        "schema": report["schema"],
+        "fingerprint_salt": report["fingerprint_salt"],
+        "suite_fingerprint": report["suite_fingerprint"],
+        "config_fingerprint": report["config_fingerprint"],
+        "repetitions": [
+            {
+                key: repetition[key]
+                for key in ("id", "case_fingerprint", "split", "index")
+            }
+            for repetition in report["repetitions"]
+        ],
+    }
+
+
+def _new_review_evidence(report: dict) -> dict:
+    return {
+        "schema": REVIEW_EVIDENCE_SCHEMA,
+        "report_binding": _private_fingerprint(
+            "review-sidecar",
+            _review_report_identity(report),
+            report["fingerprint_salt"],
+        ),
+        "fires": [],
+    }
+
+
+def validate_campaign_evidence(evidence: dict, report: dict) -> dict:
+    report = validate_campaign_report(report)
+    evidence = _expect_keys(evidence, {"schema", "report_binding", "fires"})
+    if (
+        evidence["schema"] != REVIEW_EVIDENCE_SCHEMA
+        or not _is_hash(evidence["report_binding"])
+        or not hmac.compare_digest(
+            evidence["report_binding"],
+            _private_fingerprint(
+                "review-sidecar",
+                _review_report_identity(report),
+                report["fingerprint_salt"],
+            ),
+        )
+        or not isinstance(evidence["fires"], list)
+    ):
+        raise CampaignError("Campaign private evidence does not match this report.")
+
+    attempts = {
+        attempt["id"]: attempt
+        for repetition in report["repetitions"]
+        for attempt in repetition["attempts"]
+    }
+    seen = set()
+    for record in evidence["fires"]:
+        record = _expect_keys(
+            record,
+            {
+                "attempt_id",
+                "fire_index",
+                "objective",
+                "prompt",
+                "response",
+                "objective_fingerprint",
+                "prompt_fingerprint",
+                "response_fingerprint",
+            },
+        )
+        attempt_id = record["attempt_id"]
+        fire_index = record["fire_index"]
+        if (
+            not _is_hash(attempt_id)
+            or attempt_id not in attempts
+            or not _is_count(fire_index)
+            or (attempt_id, fire_index) in seen
+            or any(
+                not isinstance(record[key], str)
+                for key in ("objective", "prompt", "response")
+            )
+            or not record["objective"]
+            or _json_text_size(record["objective"]) > _MAX_REVIEW_OBJECTIVE_BYTES
+            or not record["prompt"]
+            or _json_text_size(record["prompt"]) > _MAX_REVIEW_PROMPT_BYTES
+            or _json_text_size(record["response"]) > _MAX_REVIEW_RESPONSE_BYTES
+        ):
+            raise CampaignError("Campaign private evidence has an unsupported shape.")
+        expected_objective = _private_fingerprint(
+            "objective", record["objective"], report["fingerprint_salt"]
+        )
+        expected_prompt = _private_fingerprint(
+            "prompt", record["prompt"], report["fingerprint_salt"]
+        )
+        expected_response = _private_fingerprint(
+            "response", record["response"], report["fingerprint_salt"]
+        )
+        if (
+            not _is_hash(record["objective_fingerprint"])
+            or not _is_hash(record["prompt_fingerprint"])
+            or not _is_hash(record["response_fingerprint"])
+            or not hmac.compare_digest(record["objective_fingerprint"], expected_objective)
+            or not hmac.compare_digest(record["prompt_fingerprint"], expected_prompt)
+            or not hmac.compare_digest(record["response_fingerprint"], expected_response)
+        ):
+            raise CampaignError("Campaign private evidence body fingerprint is invalid.")
+        report_fires = attempts[attempt_id]["fires"]
+        if fire_index < len(report_fires):
+            report_fire = report_fires[fire_index]
+            if (
+                record["prompt_fingerprint"] != report_fire["prompt_fingerprint"]
+                or record["response_fingerprint"] != report_fire["response_fingerprint"]
+            ):
+                raise CampaignError("Campaign private evidence body does not match the report.")
+        elif fire_index != len(report_fires):
+            raise CampaignError("Campaign private evidence fire index is invalid.")
+        seen.add((attempt_id, fire_index))
+
+    latest_attempts = {
+        _latest(repetition)["id"]: _latest(repetition)
+        for repetition in report["repetitions"]
+    }
+    missing = {
+        (attempt_id, fire_index)
+        for attempt_id, attempt in latest_attempts.items()
+        for fire_index in range(len(attempt["fires"]))
+    } - seen
+    if missing:
+        raise CampaignError("Campaign private evidence is incomplete.")
+    return evidence
+
+
+def load_campaign_evidence(report_path: str | Path, report: dict | None = None) -> dict:
+    report = report or load_campaign_report(report_path)
+    evidence = _read_private_json(campaign_evidence_path(report_path))
+    return validate_campaign_evidence(evidence, report)
+
+
+def _compact_campaign_evidence(evidence: dict, report: dict) -> dict:
+    retained = {
+        (_latest(repetition)["id"], fire_index)
+        for repetition in report["repetitions"]
+        for fire_index in range(len(_latest(repetition)["fires"]))
+    }
+    compacted = {
+        **evidence,
+        "fires": [
+            record
+            for record in evidence["fires"]
+            if (record["attempt_id"], record["fire_index"]) in retained
+        ],
+    }
+    validate_campaign_evidence(compacted, report)
+    return compacted
+
+
+def private_review_entries(report: dict, evidence: dict) -> tuple[dict, ...]:
+    evidence = validate_campaign_evidence(evidence, report)
+    pending = {
+        _latest(repetition)["id"]
+        for repetition in report["repetitions"]
+        if _latest(repetition)["status"] == AttemptStatus.REVIEW_REQUIRED.value
+    }
+    return tuple(
+        record for record in evidence["fires"] if record["attempt_id"] in pending
+    )
+
+
+def _delete_campaign_evidence(report_path: str | Path) -> None:
+    report = load_campaign_report(report_path)
+    issues = campaign_verification_issues(report)
+    if issues:
+        raise CampaignError("Campaign private evidence cannot be deleted before verification.")
+    load_campaign_evidence(report_path, report)
+    try:
+        campaign_evidence_path(report_path).unlink()
+        _fsync_parent(campaign_evidence_path(report_path))
+    except OSError as exc:
+        raise CampaignError("Campaign private evidence could not be deleted.") from exc
+
+
+def delete_campaign_evidence(report_path: str | Path) -> None:
+    with _campaign_output_lock(Path(report_path)) as path:
+        _delete_campaign_evidence(path)
+
+
 def _validate_report_identity(
     report: dict,
     suite: CampaignSuite,
@@ -1896,7 +2431,15 @@ async def _run_campaign(
     settings = settings or CampaignSettings()
     attacker_endpoint = attacker_endpoint or config.profile()
     path = Path(output_path)
+    evidence_path = campaign_evidence_path(path)
     existing_report = load_campaign_report(path) if resume else None
+    existing_evidence = None
+    if existing_report is not None and (evidence_path.exists() or evidence_path.is_symlink()):
+        existing_evidence = load_campaign_evidence(path, existing_report)
+    elif existing_report is not None and _report_fire_count(existing_report):
+        raise CampaignError(
+            "Campaign report predates private review evidence and cannot be safely resumed."
+        )
     if expected_plan is not None:
         fingerprint_salt = _validate_fingerprint_salt(
             expected_plan.get("fingerprint_salt")
@@ -1935,13 +2478,33 @@ async def _run_campaign(
         _validate_report_identity(
             report, suite, config_fingerprint, settings, fingerprint_salt
         )
+        evidence = _compact_campaign_evidence(
+            existing_evidence or _new_review_evidence(report), report
+        )
+        _write_private_json(evidence_path, evidence)
     else:
-        if path.exists():
-            raise CampaignError("Campaign output already exists; use resume_campaign.")
+        if path.exists() or evidence_path.exists():
+            raise CampaignError(
+                "Campaign output or private evidence already exists; use resume_campaign."
+            )
         report = _initial_report(
             suite, config_fingerprint, settings, fingerprint_salt
         )
+        evidence = _new_review_evidence(report)
         _write_report(path, report)
+        try:
+            _write_private_json(evidence_path, evidence)
+        except BaseException:
+            for artifact in (evidence_path, path):
+                try:
+                    artifact.unlink()
+                except OSError:
+                    pass
+            try:
+                _fsync_parent(path)
+            except OSError:
+                pass
+            raise
     if event_sink is not None:
         event_sink(
             "campaign.started",
@@ -1988,6 +2551,10 @@ async def _run_campaign(
                 attempt["status"] = AttemptStatus.REPLACED.value
             attempt = _new_attempt(repetition["id"], attempt["ordinal"] + 1)
             repetition["attempts"].append(attempt)
+            _refresh(report)
+            _write_report(path, report)
+            evidence = _compact_campaign_evidence(evidence, report)
+            _write_private_json(evidence_path, evidence)
         if attempt["status"] != AttemptStatus.PENDING.value:
             continue
         attempt["status"] = AttemptStatus.RUNNING.value
@@ -2005,6 +2572,22 @@ async def _run_campaign(
                 },
             )
         case = case_by_fingerprint[repetition["case_fingerprint"]]
+
+        def checkpoint_private_fire(fire: dict, private: dict) -> None:
+            record = {
+                "attempt_id": attempt["id"],
+                "fire_index": len(attempt["fires"]),
+                "objective": private["objective"],
+                "prompt": private["prompt"],
+                "response": private["response"],
+                "objective_fingerprint": _private_fingerprint(
+                    "objective", private["objective"], fingerprint_salt
+                ),
+                "prompt_fingerprint": fire["prompt_fingerprint"],
+                "response_fingerprint": fire["response_fingerprint"],
+            }
+            evidence["fires"].append(record)
+            _write_private_json(evidence_path, evidence)
 
         def checkpoint_fire(fire: dict) -> None:
             attempt["fires"].append(fire)
@@ -2087,6 +2670,7 @@ async def _run_campaign(
                 assert_plan_current,
                 attacker_system=snapshot.attacker_system,
                 fingerprint_salt=fingerprint_salt,
+                on_private_fire=checkpoint_private_fire,
             )
         except asyncio.CancelledError:
             attempt["status"] = AttemptStatus.REPLACED.value
@@ -2142,11 +2726,11 @@ async def run_campaign(
     event_sink: Callable[[str, Mapping[str, object]], None] | None = None,
     expected_plan: Mapping[str, object] | None = None,
 ) -> dict:
-    with _campaign_output_lock(Path(output_path)):
+    with _campaign_output_lock(Path(output_path)) as path:
         return await _run_campaign(
             suite,
             config,
-            output_path,
+            path,
             settings,
             attacker_endpoint,
             resume=resume,
@@ -2189,6 +2773,8 @@ def _apply_reviews(
     output_path: str | Path,
     decisions: Mapping[str, Assessment | str],
 ) -> dict:
+    if not decisions:
+        raise CampaignError("Manual review requires at least one decision.")
     path = Path(output_path)
     report = load_campaign_report(path)
     attempts = {
@@ -2210,6 +2796,7 @@ def _apply_reviews(
         if decision == Assessment.PASS and _attempt_has_confirmed_finding(attempt):
             raise CampaignError("Manual review cannot clear a confirmed finding.")
         validated.append((attempt, decision))
+    load_campaign_evidence(path, report)
     for attempt, decision in validated:
         attempt["review"] = decision.value
         attempt["assessment"] = decision.value
@@ -2223,7 +2810,11 @@ def _apply_reviews(
 def apply_reviews(
     output_path: str | Path,
     decisions: Mapping[str, Assessment | str],
+    *,
+    delete_evidence: bool = False,
 ) -> dict:
-    path = Path(output_path)
-    with _campaign_output_lock(path):
-        return _apply_reviews(path, decisions)
+    with _campaign_output_lock(Path(output_path)) as path:
+        report = _apply_reviews(path, decisions)
+        if delete_evidence:
+            _delete_campaign_evidence(path)
+        return report

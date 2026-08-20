@@ -18,10 +18,14 @@ from wallbreaker.hermes_campaign import (
     _fingerprint,
     _initial_report,
     _new_attempt,
+    _new_review_evidence,
+    _private_fingerprint,
     _refresh,
     _register_target,
     _run_repetition,
+    _write_private_json,
     build_campaign_plan,
+    campaign_evidence_path,
     campaign_verification_issues,
     load_campaign_report,
     resume_campaign,
@@ -190,6 +194,37 @@ def _complete_report(tmp_path):
     return report
 
 
+def _write_report_with_evidence(path, report):
+    evidence = _new_review_evidence(report)
+    for repetition in report["repetitions"]:
+        for attempt in repetition["attempts"]:
+            for fire_index, fire in enumerate(attempt["fires"]):
+                prompt = f"Synthetic prompt {attempt['id']} {fire_index}"
+                response = f"Synthetic response {attempt['id']} {fire_index}"
+                fire["prompt_fingerprint"] = _private_fingerprint(
+                    "prompt", prompt, report["fingerprint_salt"]
+                )
+                fire["response_fingerprint"] = _private_fingerprint(
+                    "response", response, report["fingerprint_salt"]
+                )
+                evidence["fires"].append(
+                    {
+                        "attempt_id": attempt["id"],
+                        "fire_index": fire_index,
+                        "objective": "Synthetic objective",
+                        "prompt": prompt,
+                        "response": response,
+                        "objective_fingerprint": _private_fingerprint(
+                            "objective", "Synthetic objective", report["fingerprint_salt"]
+                        ),
+                        "prompt_fingerprint": fire["prompt_fingerprint"],
+                        "response_fingerprint": fire["response_fingerprint"],
+                    }
+                )
+    path.write_text(json.dumps(report), encoding="utf-8")
+    _write_private_json(campaign_evidence_path(path), evidence)
+
+
 def test_campaign_settings_preserve_existing_positional_order():
     settings = CampaignSettings(3, 12, 8192, 1024, 90)
     assert settings.attacker_max_tokens == 8192
@@ -227,6 +262,7 @@ def test_plan_is_deterministic_and_binds_limits_output_and_resume(tmp_path, monk
     assert first["fingerprint_salt"] == salt
     assert first["maximum_network_requests"] == 324
     assert first["maximum_hermes_processes"] == 216
+    assert first["maximum_private_evidence_bytes"] < 64 * 1024 * 1024
     assert first["confirmation"].startswith(f"hmac-sha256:{salt}:")
     changed = build_campaign_plan(
         suite,
@@ -245,7 +281,7 @@ def test_resume_plan_binds_validated_checkpoint(tmp_path, monkeypatch):
     settings = CampaignSettings(repetitions=1)
     report = _complete_report(tmp_path)
     output = tmp_path / "report.json"
-    output.write_text(json.dumps(report), encoding="utf-8")
+    _write_report_with_evidence(output, report)
     monkeypatch.setattr(campaign, "_require_endpoint_credentials", lambda *args: None)
     monkeypatch.setattr(campaign, "validate_hermes_runtime", lambda endpoint: None)
 
@@ -475,6 +511,22 @@ async def test_replica_rejects_context_changed_after_authorization(tmp_path, mon
     with pytest.raises(ProviderError, match="changed after authorization"):
         replica.prepare(1024)
     await replica.close()
+
+
+def test_plan_rejects_excessive_private_evidence_without_provider(tmp_path, monkeypatch):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    monkeypatch.setattr(campaign, "_require_endpoint_credentials", lambda *args: None)
+    monkeypatch.setattr(campaign, "validate_hermes_runtime", lambda endpoint: None)
+
+    with pytest.raises(CampaignError, match="private evidence budget"):
+        build_campaign_plan(
+            suite,
+            config,
+            tmp_path / "report.json",
+            CampaignSettings(repetitions=10, max_rounds=1, max_fires=6),
+            attacker,
+        )
 
 
 def test_plan_rejects_excessive_known_requests_without_provider(tmp_path, monkeypatch):
@@ -761,6 +813,61 @@ def test_report_validation_and_strict_cleanup_gate(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_resume_compacts_replaced_attempt_private_bodies_before_new_run(
+    tmp_path, monkeypatch
+):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    report = _complete_report(tmp_path)
+    old_attempt = report["repetitions"][0]["attempts"][-1]
+    old_attempt["status"] = AttemptStatus.FAILED.value
+    old_attempt["assessment"] = Assessment.MANUAL_REQUIRED.value
+    old_attempt["automatic_assessment"] = None
+    old_attempt["review"] = None
+    old_attempt["error_type"] = "SyntheticError"
+    _refresh(report)
+    output = tmp_path / "retry-report.json"
+    _write_report_with_evidence(output, report)
+    observed = []
+
+    async def inspect_compacted(*args, **kwargs):
+        current_report = load_campaign_report(output)
+        current_evidence = campaign.load_campaign_evidence(output, current_report)
+        observed.extend(record["attempt_id"] for record in current_evidence["fires"])
+        raise RuntimeError("synthetic stop after compaction")
+
+    monkeypatch.setattr(campaign, "_run_repetition", inspect_compacted)
+    await resume_campaign(
+        suite,
+        config,
+        output,
+        CampaignSettings(repetitions=1),
+        attacker,
+    )
+    assert old_attempt["id"] not in observed
+
+
+def test_legacy_v2_report_with_fires_has_explicit_resume_error(tmp_path, monkeypatch):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    report = _complete_report(tmp_path)
+    output = tmp_path / "legacy-report.json"
+    output.write_text(json.dumps(report), encoding="utf-8")
+    monkeypatch.setattr(campaign, "_require_endpoint_credentials", lambda *args: None)
+    monkeypatch.setattr(campaign, "validate_hermes_runtime", lambda endpoint: None)
+
+    with pytest.raises(CampaignError, match="predates private review evidence"):
+        build_campaign_plan(
+            suite,
+            config,
+            output,
+            CampaignSettings(repetitions=1),
+            attacker,
+            resume=True,
+        )
+
+
+@pytest.mark.asyncio
 async def test_resume_rejects_reordered_suite_topology(tmp_path):
     suite = _suite(tmp_path / "suite.yaml")
     config, attacker = _config(tmp_path)
@@ -771,7 +878,7 @@ async def test_resume_rejects_reordered_suite_topology(tmp_path):
         report["repetitions"][0],
     )
     output = tmp_path / "report.json"
-    output.write_text(json.dumps(report), encoding="utf-8")
+    _write_report_with_evidence(output, report)
 
     with pytest.raises(CampaignError, match="identity"):
         await resume_campaign(suite, config, output, settings, attacker)

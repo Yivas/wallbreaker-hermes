@@ -21,7 +21,8 @@ local server, or any OpenAI-/Anthropic-compatible API (including third-party pro
 bearer-auth). It ships with a deep red-team toolkit: the **Parseltongue** transform engine,
 the **L1B3RT4S** jailbreak library, the **HarmBench** behavior benchmark, automated attack
 loops (PAIR/TAP, Crescendo, best-of-N), a from-scratch **persona author**, native-format
-target mimicry from a leaked system-prompt corpus, a **multimodal image-edit attack channel**,
+target mimicry from an optional operator-supplied offline prompt corpus, a **multimodal
+image-edit attack channel**,
 an LLM judge, and reliability validation.
 
 > For authorized security testing only.
@@ -34,8 +35,9 @@ validation work as documented below. The Hermes laboratory adapter targets the f
 working-directory rules. It rejects tools, MCP, custom prompt layers, profiles, prefill,
 continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md). The
 campaign API and `wallbreaker hermes run|review|verify` CLI load versioned YAML suites, run isolated
-repetitions through the existing autonomous loop, and write HMAC-scoped JSON evidence for manual
-review. The optional operator skill lives under `integrations/hermes/`.
+repetitions through the existing autonomous loop, write a sanitized HMAC-scoped report, and keep
+human-review bodies in a separate permission-restricted sidecar. The optional operator skill lives
+under `integrations/hermes/` and never opens that private evidence.
 
 The PyPI distribution is `wallbreaker-hermes`. The import package and commands remain
 `wallbreaker` and `wb` for upstream compatibility.
@@ -64,9 +66,9 @@ The PyPI distribution is `wallbreaker-hermes`. The import package and commands r
   jailbreak from scratch via the codified ENI method (draft → self-critique → validate →
   refine → distill), auto-picking a credentialed-authority or limerence register from the
   objective's domain.
-- **Native-format mimicry:** `sysprompt_*` tools search a leaked product system-prompt
-  corpus (Claude/GPT/Gemini/Grok…) and hand the target's own section-tag/heading dialect to
-  the persona author so a payload speaks the victim model's native format.
+- **Native-format mimicry:** `sysprompt_*` tools can search an operator-supplied offline product
+  prompt corpus and hand a matched section-tag/heading dialect to the persona author. Wallbreaker
+  does not ship or fetch that corpus; the operator is responsible for permission and provenance.
 - **Multimodal image channel:** `query_image_edit` fires an image + instruction at an image
   target and vision-judges the result; `image_chain` runs a Chain-of-Jailbreak, decomposing a
   refused image into a ladder of benign edit steps. Plus Tier-3 T2I framing transforms.
@@ -245,7 +247,7 @@ COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
 | `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode`: 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
 | `l1b3rt4s_*`, `eni_*` | jailbreak libraries: L1B3RT4S + the ENI persona collection |
 | `author_persona` | author a full devoted-persona system prompt from scratch (ENI method: draft→critique→validate→refine→distill), auto-picking an authority/limerence register from the objective's domain |
-| `sysprompt_list`, `sysprompt_search`, `sysprompt_get`, `sysprompt_native` | browse/search a leaked product system-prompt corpus (Claude/GPT/Gemini/Grok…); `sysprompt_native` hands the target's own section-tag/heading format to the persona author for native mimicry |
+| `sysprompt_list`, `sysprompt_search`, `sysprompt_get`, `sysprompt_native` | browse an optional operator-supplied offline prompt corpus; `sysprompt_native` derives formatting hints for native mimicry without shipping or fetching corpus content |
 | `harmbench`, `preset` | unbiased behavior benchmark, curated seed templates |
 | `query_target` | fire at the model-under-test (with `transforms=[...]` to encode+fire) |
 | `query_image_edit` | fire an input image + instruction at an IMAGE target (`modality='image'`) and vision-judge the edited picture |

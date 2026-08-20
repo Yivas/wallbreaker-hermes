@@ -48,6 +48,25 @@ must remain clean at the fixed commit.
 The fixtures use synthetic names and contain no credentials, private prompts, operational paths,
 or provider endpoints.
 
+## Private review
+
+An authorized campaign writes the sanitized `RUN` report and `RUN.evidence.json`. The sidecar is
+local, gitignored, permission-restricted, and bound to the report with
+`WALLBREAKER_HERMES_EVIDENCE_KEY`. Hermes Agent may list pending IDs but must not open or reproduce
+that file.
+
+The operator reviews bodies in a separate interactive terminal:
+
+```text
+wallbreaker hermes review RUN --show-evidence
+wallbreaker hermes review RUN --set ATTEMPT=pass
+wallbreaker hermes verify RUN
+wallbreaker hermes review RUN --delete-evidence
+```
+
+Delete the sidecar only after all reviews resolve and verification succeeds. Deletion does not
+remove backups or storage snapshots.
+
 ## Remove
 
 Use Hermes Agent's normal skill removal command:

@@ -48,7 +48,8 @@ Stop if authorization is absent or denied.
    ```
 
 3. Read the `plan.validated` NDJSON event. Present its limits, maximum network requests, maximum
-   Hermes processes, artifact path, and confirmation token to the operator.
+   Hermes processes, maximum private-evidence bytes, artifact path, and confirmation token to the
+   operator.
 4. Use `clarify` again. Ask whether the operator authorizes that exact plan. If any input changes,
    discard the token and repeat the dry run.
 5. After an affirmative answer, run the same command with the same limits, replacing `--dry-run`
@@ -64,8 +65,10 @@ Stop if authorization is absent or denied.
    wallbreaker hermes review RUN
    ```
 
-   Use `clarify` for each `pass` or `finding` decision, then apply only the decisions the operator
-   supplied:
+   Tell the operator to inspect the private evidence in a separate local terminal with
+   `wallbreaker hermes review RUN --show-evidence`. Never invoke that option through a Hermes tool
+   or ask the operator to paste bodies into the conversation. Use `clarify` only after the operator
+   has reviewed the evidence, then apply the `pass` or `finding` decisions they supply:
 
    ```text
    wallbreaker hermes review RUN --set ATTEMPT=pass
@@ -84,6 +87,7 @@ Stop if authorization is absent or denied.
 - Do not read, print, copy, or modify credentials, `.env` files, SOUL, memories, conversations,
   prompts, responses, profiles, endpoints, or operational Hermes configuration.
 - Pass operator-supplied paths to Wallbreaker without opening their contents.
+- Never invoke `--show-evidence`, open `RUN.evidence.json`, or reproduce private review bodies.
 - Do not install this skill into the clean Hermes checkout used as the target.
 - Do not modify Hermes core, the source home, the ephemeral replica, or campaign JSON by hand.
 - Do not treat a security finding as a harness failure. Report findings and their aggregate counts.
@@ -106,5 +110,6 @@ as a syntax error, not pending review.
 ## Verification
 
 A completed workflow has a `wallbreaker.hermes-campaign-report/v2` artifact, no pending review,
-and verified attestation and cleanup evidence. Keep the report path; do not reproduce its contents
-outside the operator's requested destination.
+and verified attestation and cleanup evidence. The operator may delete `RUN.evidence.json` with
+`wallbreaker hermes review RUN --delete-evidence` after verification. Keep the report path; do not
+reproduce report or sidecar contents outside the operator's requested destination.

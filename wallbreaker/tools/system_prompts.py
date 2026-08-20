@@ -40,8 +40,10 @@ def is_present() -> bool:
 
 def _missing_msg() -> str:
     return (
-        "system-prompt corpus not found at " + str(library_dir()) + ". Vendor the leaked "
-        "product prompts there (from asgeirtj/system_prompts_leaks), organized by vendor."
+        "Optional offline product-prompt corpus not found at "
+        + str(library_dir())
+        + ". Supply a permitted local corpus organized by vendor; Wallbreaker does not fetch "
+        "or distribute one."
     )
 
 
@@ -86,7 +88,7 @@ def _find_file(name: str) -> Path | None:
 
 
 def match_target(model_id: str) -> Path | None:
-    """Best leaked product prompt for a target model id (e.g. 'anthropic/claude-opus-4.6')."""
+    """Best local product prompt for a target model id (e.g. 'anthropic/claude-opus-4.6')."""
     if not is_present() or not model_id:
         return None
     toks = _tokens(model_id)
@@ -123,7 +125,7 @@ def match_target(model_id: str) -> Path | None:
 
 
 def format_digest(path_or_text) -> str:
-    """Summarize a leaked prompt's NATIVE formatting conventions for mimicry."""
+    """Summarize a local prompt's native formatting conventions for mimicry."""
     if isinstance(path_or_text, Path):
         text = path_or_text.read_text(encoding="utf-8", errors="replace")
         label = _rel(path_or_text)
@@ -189,7 +191,7 @@ async def _list_tool(args: dict, ctx: ToolContext) -> str:
     if vendor and not rels:
         return ("No prompts for vendor '" + str(vendor) + "'. Vendors: "
                 + ", ".join(list_vendors()))
-    header = (str(len(rels)) + " leaked product system prompts"
+    header = (str(len(rels)) + " local product system prompts"
               + (" for " + vendor if vendor else " across " + str(len(list_vendors()))
                  + " vendors (" + ", ".join(list_vendors()) + ")") + ":")
     return header + "\n" + "\n".join(rels)
@@ -238,7 +240,7 @@ async def _native_tool(args: dict, ctx: ToolContext) -> str:
                 "or configure a target.")
     path = match_target(model)
     if path is None:
-        return ("No leaked prompt matched target '" + model + "'. It may be a vendor not in "
+        return ("No local prompt matched target '" + model + "'. It may be a vendor not in "
                 "the corpus (" + ", ".join(list_vendors()) + "). author_persona still works "
                 "without native-format intel.")
     digest = format_digest(path)
@@ -251,10 +253,9 @@ def register(registry: ToolRegistry) -> None:
     registry.add(
         name="sysprompt_list",
         description=(
-            "List the leaked PRODUCT system prompts in the local corpus (asgeirtj/"
-            "system_prompts_leaks) - the real chat system prompts of Claude, ChatGPT/GPT, "
-            "Gemini, Grok, Llama, Mistral, Qwen, Copilot, etc. Optional 'vendor' filter. "
-            "These expose each model's NATIVE instruction dialect for native-format mimicry."
+            "List product prompts from the optional operator-supplied offline corpus. "
+            "Wallbreaker does not fetch or distribute the corpus. Optional 'vendor' filter. "
+            "Entries can provide native instruction dialects for format mimicry."
         ),
         parameters={"type": "object", "properties": {
             "vendor": {"type": "string", "description": "Filter by vendor dir "
@@ -263,19 +264,17 @@ def register(registry: ToolRegistry) -> None:
     )
     registry.add(
         name="sysprompt_search",
-        description=("Keyword-search the leaked product system-prompt corpus across all "
-                     "vendors. Ranks by hit count; returns line matches. Good for finding how "
-                     "a specific model phrases its refusal/safety/tool sections."),
+        description=("Keyword-search the optional operator-supplied product-prompt corpus "
+                     "across all vendors. Ranks by hit count and returns line matches."),
         parameters={"type": "object", "properties": {"query": {"type": "string"}},
                     "required": ["query"]},
         handler=_search_tool,
     )
     registry.add(
         name="sysprompt_get",
-        description=("Fetch a leaked product system prompt by path/name "
+        description=("Fetch an operator-supplied product prompt by path/name "
                      "('Anthropic/Official/2026-02-05-claude-opus-4.6') or by a model id "
-                     "(fuzzy-matched to the closest leaked prompt). Returns the raw prompt - "
-                     "the target's own instructions, useful to turn against itself."),
+                     "matched to the closest local prompt."),
         parameters={"type": "object", "properties": {
             "name": {"type": "string", "description": "vendor/model path or a model id"}},
             "required": ["name"]},
@@ -285,7 +284,7 @@ def register(registry: ToolRegistry) -> None:
         name="sysprompt_native",
         description=(
             "Given the configured target (or an explicit 'model' id), return the matched "
-            "leaked system prompt's NATIVE FORMAT digest - the section tags, headings, and "
+            "local product prompt's NATIVE FORMAT digest - the section tags, headings, and "
             "opening style to mirror. This is the ENI-LIME native-format-mimicry lever: an "
             "authored persona written in the target's own system-prompt dialect gets "
             "authority-weighted like a real system instruction. author_persona consumes this "

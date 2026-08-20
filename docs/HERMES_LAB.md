@@ -120,14 +120,15 @@ assistant prefill, profiles, directives, selected skills, multimodal input, stre
 temperature overrides, target result caching, CoT recovery, and tools.
 
 BreakVault autoarchiving, run logs, automatic and manual session saves, transcript exports, and
-`finish` artifacts are disabled for Hermes targets. Prompt and response data remain in process
-memory and on the active terminal only; capture anything needed before ending the run.
+`finish` artifacts are disabled for direct Hermes targets. Programmatic campaigns keep review
+bodies only in the private sidecar described below; the sanitized report never contains them.
 
 ## Programmatic Campaigns
 
 `wallbreaker.hermes_campaign` provides `load_suite`, `run_campaign`, `resume_campaign`, and
-`apply_reviews`. The `wallbreaker hermes` CLI uses this API without adding another runner or
-persistence layer. A suite uses the closed `wallbreaker.hermes-campaign-suite/v1` schema:
+`apply_reviews`. The `wallbreaker hermes` CLI uses this API without adding another runner. It writes
+a sanitized report plus a private review sidecar. A suite uses the closed
+`wallbreaker.hermes-campaign-suite/v1` schema:
 
 ```yaml
 schema: wallbreaker.hermes-campaign-suite/v1
@@ -158,13 +159,30 @@ HMAC-scoped fingerprints, enums, counts, state component names, attestations, cl
 a one-sided 95% Wilson lower bound when a split is complete. It never stores suite IDs, case IDs,
 objectives, prompts, responses, judge rationales, endpoint URLs, context paths, credentials, or
 conversation logs. Fingerprints from different campaign plans are unlinkable without the operator's
-key.
+key. These fingerprints protect privacy and plan binding; the report is structurally validated but
+is not a signed or independently tamper-evident artifact.
 
-Campaign writes are atomic. `resume_campaign` runs pending repetitions and replaces interrupted or
-failed attempts with a new attempt on a fresh replica. It never continues an interrupted replica.
-`apply_reviews` accepts only `pass` or `finding` for attempts marked `review_required` and
-recalculates aggregates. Discordant repetitions require review and do not receive a confidence
-bound until resolved.
+Each authorized run created by this workflow also creates `RUN.evidence.json` beside `RUN`. Reports
+produced by `wallbreaker-hermes==0.2.2` before sidecars remain structurally verifiable, but a report
+that already contains fires cannot be safely resumed or manually resolved because its bodies no
+longer exist. The CLI reports that limitation instead of accepting an evidence-free decision.
+
+The private sidecar stores only
+the objective, effective prompt, assessed response, attempt, and fire index needed for human review.
+It excludes credentials, endpoints, configuration, system prompts, context files, reasoning, and
+conversation transcripts. Wallbreaker writes it before the corresponding sanitized checkpoint,
+uses restrictive file permissions, ignores it in Git, and binds it to the report and body
+fingerprints with `WALLBREAKER_HERMES_EVIDENCE_KEY`.
+
+Each report or sidecar replacement is atomic, but the pair is not one filesystem transaction. A
+new run writes the empty report first and removes it if private-sidecar creation fails; resume can
+recreate a missing empty sidecar before any fire and rejects older reports that already contain
+fires without review evidence. `resume_campaign` runs pending repetitions and replaces interrupted
+or failed attempts with a new attempt on a fresh replica. It never continues an interrupted replica.
+`apply_reviews` requires a valid matching sidecar, accepts only `pass` or `finding` for attempts
+marked `review_required`, and recalculates aggregates. Discordant repetitions require review and do
+not receive a confidence bound until resolved. Resume also validates the sidecar before constructing
+providers when the report already contains fires.
 
 ## Operator CLI
 
@@ -175,16 +193,18 @@ wallbreaker hermes run SUITE --config CONFIG --output RUN --dry-run
 ```
 
 Set `WALLBREAKER_HERMES_EVIDENCE_KEY` to an operator-held random value of at least 32 bytes before
-planning or running a campaign. Keep the same key for dry run, execution, and resume; do not
-commit it or store it beside the report. Offline review and structural verification do not need the
-key because they treat persisted fingerprints as opaque evidence.
+planning or running a campaign. Keep the same key for dry run, execution, resume, and review; do
+not commit it or store it beside the report. Structural verification does not need the key because
+it never opens the sidecar.
 
-The command loads Wallbreaker's normal environment, validates the suite, configuration,
+The Hermes campaign CLI uses variables already present in the process environment and does not
+search for or load dotenv files. It validates the suite, configuration,
 credentials, fixed Hermes runtime, selected context, limits, output, and any resume report, and
 runs local Git and Python identity checks. It creates no provider, network request, temporary
 replica, or campaign report. It emits closed NDJSON using
 `wallbreaker.hermes-cli-event/v1`. The `plan.validated` event contains HMAC-scoped identities,
-limits, maximum known network requests, maximum Hermes processes, and a confirmation token.
+limits, maximum known network requests, maximum Hermes processes, maximum private-evidence bytes,
+and a confirmation token.
 
 After the operator authorizes that exact plan, repeat the command with the same arguments and
 limits:
@@ -206,11 +226,26 @@ List pending review IDs without changing the report:
 wallbreaker hermes review RUN
 ```
 
+A human can display the matching private bodies on an interactive local terminal. Do not run this
+option through Hermes Agent, another model, captured automation, or a shared terminal:
+
+```text
+wallbreaker hermes review RUN --show-evidence
+```
+
 Apply decisions supplied by the operator:
 
 ```text
 wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
 ```
+
+After all reviews resolve and strict verification succeeds, delete the private sidecar explicitly:
+
+```text
+wallbreaker hermes review RUN --delete-evidence
+```
+
+Deletion cannot erase backups, snapshots, or storage remnants.
 
 Verify the closed report offline:
 
@@ -240,7 +275,9 @@ hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbr
 ```
 
 The skill is fixed to Hermes Agent release `v2026.8.13`, package `0.20.1`, and commit
-`f80f453ae0679347e38abc917c7f94f717bf96c5`. It uses `clarify` for authorization, limits,
-confirmation, and review decisions, then invokes the CLI through a normal shell tool. It does not
-modify Hermes core, inspect configuration contents, or use `execute_code` for campaign commands.
+`f80f453ae0679347e38abc917c7f94f717bf96c5`. It uses `clarify` for authorization, limits, and
+confirmation, then invokes the CLI through a normal shell tool. It may list pending review IDs, but
+it never invokes `--show-evidence` or receives review bodies. The human reviews them in a separate
+local terminal and supplies the resulting decisions. The skill does not modify Hermes core,
+inspect configuration contents, or use `execute_code` for campaign commands.
 Fictional fixtures are under `integrations/hermes/examples/`.

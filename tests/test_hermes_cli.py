@@ -59,6 +59,7 @@ def _plan(token=None):
         },
         "maximum_network_requests": 324,
         "maximum_hermes_processes": 216,
+        "maximum_private_evidence_bytes": 42_688_512,
         "confirmation": token or f"hmac-sha256:{salt}:" + "b" * 64,
     }
 
@@ -197,7 +198,6 @@ def test_missing_authorization_fails_before_config_load(monkeypatch, capsys):
 
 def test_dry_run_has_no_runner_or_private_output(monkeypatch, capsys):
     calls = []
-    monkeypatch.setattr(hermes_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(hermes_cli, "load_config", lambda path: _config())
     monkeypatch.setattr(hermes_cli, "load_suite", lambda path: object())
     monkeypatch.setattr(hermes_cli, "build_campaign_plan", lambda *args, **kwargs: _plan())
@@ -225,7 +225,6 @@ def test_dry_run_has_no_runner_or_private_output(monkeypatch, capsys):
 
 def test_confirmation_mismatch_fails_before_runner(monkeypatch, capsys):
     calls = []
-    monkeypatch.setattr(hermes_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(hermes_cli, "load_config", lambda path: _config())
     monkeypatch.setattr(hermes_cli, "load_suite", lambda path: object())
     monkeypatch.setattr(hermes_cli, "build_campaign_plan", lambda *args, **kwargs: _plan())
@@ -252,7 +251,6 @@ def test_confirmation_mismatch_fails_before_runner(monkeypatch, capsys):
 def test_confirmed_run_uses_existing_runner_and_emits_progress(monkeypatch, capsys):
     calls = []
     report = {"status": "complete", "repetitions": []}
-    monkeypatch.setattr(hermes_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(hermes_cli, "load_config", lambda path: _config())
     monkeypatch.setattr(hermes_cli, "load_suite", lambda path: object())
     monkeypatch.setattr(hermes_cli, "build_campaign_plan", lambda *args, **kwargs: _plan())
@@ -298,6 +296,16 @@ def test_review_lists_pending_without_config_or_network(monkeypatch, capsys):
         "_summary",
         lambda value: {"status": "partial", "pending_review_ids": ["1" * 64]},
     )
+    monkeypatch.setattr(
+        hermes_cli,
+        "load_campaign_evidence",
+        lambda *args: pytest.fail("bare review must not open private evidence"),
+    )
+    monkeypatch.setattr(
+        hermes_cli,
+        "private_review_entries",
+        lambda *args: pytest.fail("bare review must not materialize private bodies"),
+    )
 
     code = main(["hermes", "review", "run.json"])
 
@@ -305,6 +313,44 @@ def test_review_lists_pending_without_config_or_network(monkeypatch, capsys):
     events = _events(capsys)
     assert events[0]["event"] == "review.pending"
     assert events[-1]["data"]["pending_review_ids"] == ["1" * 64]
+
+
+def test_local_review_displays_private_bodies_only_on_stderr(monkeypatch, capsys):
+    attempt = "1" * 64
+    report = {"status": "partial"}
+    entries = (
+        {
+            "attempt_id": attempt,
+            "fire_index": 0,
+            "objective": "Private objective",
+            "prompt": "Private prompt",
+            "response": "Private response\x1b]52;c;clipboard\x07",
+        },
+    )
+    monkeypatch.setattr(hermes_cli, "load_campaign_report", lambda path: report)
+    monkeypatch.setattr(
+        hermes_cli,
+        "_summary",
+        lambda value: {"status": "partial", "pending_review_ids": [attempt]},
+    )
+    monkeypatch.setattr(hermes_cli, "load_campaign_evidence", lambda path, value: object())
+    monkeypatch.setattr(hermes_cli, "private_review_entries", lambda value, evidence: entries)
+    monkeypatch.setattr(hermes_cli.sys.stderr, "isatty", lambda: True)
+
+    code = main(["hermes", "review", "run.json", "--show-evidence"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "Private prompt" in captured.err
+    assert "Private response" in captured.err
+    assert "\\x1b]52;c;clipboard\\x07" in captured.err
+    assert "\x1b" not in captured.err
+    assert "Private prompt" not in captured.out
+    assert "Private response" not in captured.out
+
+
+def test_hermes_campaign_cli_does_not_load_dotenv():
+    assert not hasattr(hermes_cli, "load_dotenv")
 
 
 def test_duplicate_review_decisions_fail_before_mutation(monkeypatch, capsys):
@@ -336,6 +382,11 @@ def test_verify_is_offline_and_returns_action_required(monkeypatch, capsys):
     monkeypatch.setattr(hermes_cli, "campaign_verification_issues", lambda value: ("review_pending",))
     monkeypatch.setattr(
         hermes_cli,
+        "load_campaign_evidence",
+        lambda *args: pytest.fail("verify must not load private evidence"),
+    )
+    monkeypatch.setattr(
+        hermes_cli,
         "_summary",
         lambda value: {"status": "partial", "pending_review_ids": ["1" * 64]},
     )
@@ -350,7 +401,6 @@ def test_verify_is_offline_and_returns_action_required(monkeypatch, capsys):
 
 @pytest.mark.parametrize("error", [KeyboardInterrupt(), asyncio.CancelledError()])
 def test_cancellation_returns_130(monkeypatch, capsys, error):
-    monkeypatch.setattr(hermes_cli, "load_dotenv", lambda: None)
     monkeypatch.setattr(hermes_cli, "load_config", lambda path: _config())
     monkeypatch.setattr(hermes_cli, "load_suite", lambda path: object())
     monkeypatch.setattr(hermes_cli, "build_campaign_plan", lambda *args, **kwargs: _plan())

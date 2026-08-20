@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -19,14 +20,26 @@ from wallbreaker.hermes_campaign import (
     _assess_behavior,
     _assess_state,
     _combine_assessments,
+    _compact_campaign_evidence,
     _config_fingerprint,
     _campaign_output_lock,
     _evaluate_fire,
     _initial_report,
     _register_target,
+    _json_text_size,
+    _new_attempt,
+    _new_review_evidence,
+    _private_fingerprint,
+    _read_private_json,
     _refresh,
+    _write_private_json,
     apply_reviews,
+    campaign_evidence_path,
+    delete_campaign_evidence,
+    load_campaign_evidence,
+    load_campaign_report,
     load_suite,
+    validate_campaign_evidence,
     resume_campaign,
     run_campaign,
 )
@@ -135,6 +148,11 @@ def _result(response, changed=(), tool_attempts=0):
         receipt,
         _evidence(changed, tool_attempts),
     )
+
+
+def _write_report_with_evidence(path: Path, report: dict) -> None:
+    path.write_text(json.dumps(report), encoding="utf-8")
+    _write_private_json(campaign_evidence_path(path), _new_review_evidence(report))
 
 
 def test_loader_builds_stable_identities_and_rejects_yaml_aliases(tmp_path):
@@ -345,12 +363,229 @@ async def test_campaign_runs_autonomous_and_persists_only_closed_evidence(tmp_pa
     ):
         assert private_text not in saved
     assert not list((tmp_path / "external-log").glob("*.jsonl"))
+    private_path = campaign_evidence_path(output)
+    private_text = private_path.read_text(encoding="utf-8")
+    assert "Synthetic context objective" in private_text
+    assert "Synthetic context response" in private_text
+    evidence = load_campaign_evidence(output, report)
+    assert any(record["attempt_id"] == attempt["id"] for record in evidence["fires"])
+    if os.name != "nt":
+        assert private_path.stat().st_mode & 0o077 == 0
     reviewed = apply_reviews(output, {attempt["id"]: Assessment.PASS})
     assert reviewed["status"] == CampaignStatus.COMPLETE.value
     assert all(
         aggregate["confidence"]["applicable"]
         for aggregate in reviewed["aggregates"].values()
     )
+
+
+def test_private_evidence_rejects_tampered_bodies(tmp_path):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    settings = CampaignSettings(repetitions=1)
+    report = _initial_report(
+        suite,
+        _config_fingerprint(config, attacker, config.judge, settings),
+        settings,
+        "a" * 64,
+    )
+    evidence = _new_review_evidence(report)
+    attempt_id = report["repetitions"][0]["attempts"][0]["id"]
+    prompt = "Synthetic private prompt"
+    response = "Synthetic private response"
+    evidence["fires"].append(
+        {
+            "attempt_id": attempt_id,
+            "fire_index": 0,
+            "objective": "Synthetic private objective",
+            "prompt": prompt,
+            "response": response,
+            "objective_fingerprint": _private_fingerprint(
+                "objective", "Synthetic private objective", "a" * 64
+            ),
+            "prompt_fingerprint": _private_fingerprint("prompt", prompt, "a" * 64),
+            "response_fingerprint": _private_fingerprint("response", response, "a" * 64),
+        }
+    )
+    validate_campaign_evidence(evidence, report)
+    evidence["fires"][0]["objective"] = "Tampered objective"
+    with pytest.raises(CampaignError, match="body fingerprint"):
+        validate_campaign_evidence(evidence, report)
+    evidence["fires"][0]["objective"] = "Synthetic private objective"
+    evidence["fires"][0]["response"] = "Tampered response"
+    with pytest.raises(CampaignError, match="body fingerprint"):
+        validate_campaign_evidence(evidence, report)
+    evidence["fires"][0]["response"] = response
+    evidence["fires"][0]["prompt_fingerprint"] = 1
+    with pytest.raises(CampaignError, match="body fingerprint"):
+        validate_campaign_evidence(evidence, report)
+
+
+def test_private_evidence_file_is_restrictive_and_bound_to_report(tmp_path):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    settings = CampaignSettings(repetitions=1)
+    report = _initial_report(
+        suite,
+        _config_fingerprint(config, attacker, config.judge, settings),
+        settings,
+        "b" * 64,
+    )
+    report_path = tmp_path / "run.json"
+    evidence_path = campaign_evidence_path(report_path)
+    _write_private_json(evidence_path, _new_review_evidence(report))
+    assert load_campaign_evidence(report_path, report)["fires"] == []
+    if os.name != "nt":
+        assert evidence_path.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.asyncio
+async def test_initial_private_write_failure_removes_empty_report(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    output = tmp_path / "run.json"
+
+    def fail_private_write(*args, **kwargs):
+        raise OSError("synthetic private write failure")
+
+    monkeypatch.setattr(campaign, "_write_private_json", fail_private_write)
+    with pytest.raises(OSError, match="synthetic private write failure"):
+        await run_campaign(
+            suite,
+            config,
+            output,
+            CampaignSettings(repetitions=1),
+            attacker,
+        )
+    assert not output.exists()
+    assert not campaign_evidence_path(output).exists()
+
+
+@pytest.mark.asyncio
+async def test_initial_private_fsync_failure_removes_report_and_sidecar(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    output = tmp_path / "run.json"
+    real_fsync = campaign._fsync_parent
+    calls = 0
+
+    def fail_second_fsync(path):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("synthetic directory fsync failure")
+        real_fsync(path)
+
+    monkeypatch.setattr(campaign, "_fsync_parent", fail_second_fsync)
+    with pytest.raises(OSError, match="synthetic directory fsync failure"):
+        await run_campaign(
+            suite,
+            config,
+            output,
+            CampaignSettings(repetitions=1),
+            attacker,
+        )
+    assert not output.exists()
+    assert not campaign_evidence_path(output).exists()
+
+
+def test_private_reader_normalizes_large_integer_and_surrogate_errors(tmp_path):
+    path = tmp_path / "malformed.evidence.json"
+    path.write_text("1" * 5000, encoding="utf-8")
+    if os.name != "nt":
+        path.chmod(0o600)
+    with pytest.raises(CampaignError, match="valid UTF-8 JSON"):
+        _read_private_json(path)
+    with pytest.raises(CampaignError, match="valid UTF-8"):
+        _json_text_size("\ud800")
+
+
+def test_private_writer_enforces_total_size(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    monkeypatch.setattr(campaign, "_MAX_REVIEW_EVIDENCE_BYTES", 128)
+    with pytest.raises(CampaignError, match="exceeds"):
+        _write_private_json(tmp_path / "oversized.evidence.json", {"body": "x" * 256})
+
+
+def test_output_lock_rejects_hardlink_alias(tmp_path):
+    report = tmp_path / "run.json"
+    report.write_text("{}", encoding="utf-8")
+    alias = tmp_path / "alias.json"
+    os.link(report, alias)
+    with pytest.raises(CampaignError, match="standalone"):
+        with _campaign_output_lock(alias):
+            pass
+
+
+def test_output_lock_revalidates_artifact_after_lock_acquisition(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    report = tmp_path / "run.json"
+    report.write_text("{}", encoding="utf-8")
+    alias = tmp_path / "late-alias.json"
+    real_open = campaign._open_lock_descriptor
+
+    def alias_then_open(path):
+        os.link(report, alias)
+        return real_open(path)
+
+    monkeypatch.setattr(campaign, "_open_lock_descriptor", alias_then_open)
+    with pytest.raises(CampaignError, match="standalone"):
+        with _campaign_output_lock(report):
+            pass
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX FIFO behavior")
+def test_report_fifo_is_rejected_without_blocking(tmp_path):
+    fifo = tmp_path / "run.json"
+    os.mkfifo(fifo)
+    with pytest.raises(CampaignError, match="standalone"):
+        load_campaign_report(fifo)
+
+
+def test_private_evidence_compaction_drops_unreferenced_attempt_bodies(tmp_path):
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+    settings = CampaignSettings(repetitions=1)
+    report = _initial_report(
+        suite,
+        _config_fingerprint(config, attacker, config.judge, settings),
+        settings,
+        "c" * 64,
+    )
+    repetition = report["repetitions"][0]
+    replaced = repetition["attempts"][0]
+    replaced["status"] = AttemptStatus.REPLACED.value
+    replaced["assessment"] = Assessment.MANUAL_REQUIRED.value
+    current = _new_attempt(repetition["id"], 1)
+    repetition["attempts"].append(current)
+    evidence = _new_review_evidence(report)
+    for attempt in (replaced, current):
+        evidence["fires"].append(
+            {
+                "attempt_id": attempt["id"],
+                "fire_index": 0,
+                "objective": "Synthetic objective",
+                "prompt": "Synthetic prompt",
+                "response": "Synthetic response",
+                "objective_fingerprint": _private_fingerprint(
+                    "objective", "Synthetic objective", "c" * 64
+                ),
+                "prompt_fingerprint": _private_fingerprint(
+                    "prompt", "Synthetic prompt", "c" * 64
+                ),
+                "response_fingerprint": _private_fingerprint(
+                    "response", "Synthetic response", "c" * 64
+                ),
+            }
+        )
+    compacted = _compact_campaign_evidence(evidence, report)
+    assert compacted["fires"] == []
 
 
 def test_discordant_repetitions_require_review_and_withhold_confidence(tmp_path):
@@ -402,6 +637,66 @@ async def test_nonreversible_response_transform_is_rejected_before_fire(tmp_path
     )
     assert result.content == "Error: unsupported response transform"
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_expansive_prompt_transform_is_rejected_before_fire(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    suite = _suite(tmp_path / "suite.yaml")
+    config, _ = _config(tmp_path)
+    calls = []
+    registry = ToolRegistry(ToolContext(config=config, vault_enabled=False))
+    _register_target(
+        registry,
+        suite.cases[0],
+        CampaignSettings(repetitions=1),
+        [],
+        config.judge,
+    )
+    monkeypatch.setattr(campaign, "build_provider", lambda *args, **kwargs: calls.append(args))
+    result = await registry.execute(
+        "query_target",
+        {"prompt": "x" * 3000, "transforms": ["artprompt"]},
+    )
+    assert result.content == "Error: transformed prompt exceeds the private evidence limit"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_expansive_response_transform_keeps_bounded_original(tmp_path, monkeypatch):
+    import wallbreaker.hermes_campaign as campaign
+
+    suite = _suite(tmp_path / "suite.yaml")
+    config, _ = _config(tmp_path)
+    fires = []
+    private = []
+    registry = ToolRegistry(ToolContext(config=config, vault_enabled=False))
+    _register_target(
+        registry,
+        suite.cases[0],
+        CampaignSettings(repetitions=1),
+        fires,
+        config.judge,
+        on_private_fire=lambda fire, body: private.append(body),
+    )
+
+    class FakeTarget:
+        async def fire(self, messages, **kwargs):
+            return _result("bounded response")
+
+    async def fake_judge(*args, **kwargs):
+        return {"label": "PARTIAL", "score": 5, "reason": "fixture"}
+
+    monkeypatch.setattr(campaign, "build_provider", lambda *args, **kwargs: FakeTarget())
+    monkeypatch.setattr(campaign, "judge_reply", fake_judge)
+    monkeypatch.setattr(campaign, "decode_chain", lambda *args: "x" * (300 * 1024))
+    result = await registry.execute(
+        "query_target",
+        {"prompt": "Synthetic prompt", "response_transforms": ["hex"]},
+    )
+    assert result.content == "Error: response transform could not be decoded"
+    assert private[0]["response"] == "bounded response"
 
 
 @pytest.mark.asyncio
@@ -467,8 +762,8 @@ async def test_resume_rejects_changed_selected_context(tmp_path):
     settings = CampaignSettings(repetitions=1)
     fingerprint = _config_fingerprint(config, attacker, config.judge, settings)
     output = tmp_path / "campaign.json"
-    output.write_text(
-        json.dumps(_initial_report(suite, fingerprint, settings)), encoding="utf-8"
+    _write_report_with_evidence(
+        output, _initial_report(suite, fingerprint, settings)
     )
     soul.write_text("Synthetic changed identity", encoding="utf-8")
     with pytest.raises(CampaignError, match="identity"):
@@ -524,7 +819,7 @@ async def test_resume_replaces_interrupted_attempt_instead_of_resuming_it(
         ]
     _refresh(report)
     output = tmp_path / "campaign.json"
-    output.write_text(json.dumps(report), encoding="utf-8")
+    _write_report_with_evidence(output, report)
 
     async def fake_run(*args, **kwargs):
         return "finished", Assessment.PASS, [{"assessment": Assessment.PASS.value}]
@@ -561,6 +856,9 @@ async def test_cancelled_campaign_persists_replacement_state(tmp_path, monkeypat
     assert saved["schema"] == REPORT_SCHEMA
     assert saved["status"] == CampaignStatus.CANCELLED.value
     assert saved["repetitions"][0]["attempts"][-1]["status"] == AttemptStatus.REPLACED.value
+    with pytest.raises(CampaignError, match="at least one decision"):
+        apply_reviews(output, {})
+    assert load_campaign_report(output)["status"] == CampaignStatus.CANCELLED.value
 
 
 @pytest.mark.asyncio
@@ -600,6 +898,8 @@ async def test_concurrent_campaign_writer_fails_closed(tmp_path, monkeypatch):
         )
     with pytest.raises(CampaignError, match="already in use"):
         apply_reviews(output, {})
+    with pytest.raises(CampaignError, match="already in use"):
+        delete_campaign_evidence(output)
     release.set()
     await first
 
@@ -654,13 +954,15 @@ def test_lock_open_failure_releases_in_process_guard(tmp_path, monkeypatch):
 
     output = tmp_path / "missing-parent" / "campaign.json"
 
+    real_open = campaign._open_lock_descriptor
+
     def fail_open(*args, **kwargs):
         raise OSError("fixture failure")
 
-    monkeypatch.setattr(campaign, "open", fail_open, raising=False)
+    monkeypatch.setattr(campaign, "_open_lock_descriptor", fail_open)
     with pytest.raises(CampaignError, match="lock could not be created"):
         with _campaign_output_lock(output):
             pass
-    monkeypatch.delattr(campaign, "open")
+    monkeypatch.setattr(campaign, "_open_lock_descriptor", real_open)
     with _campaign_output_lock(output):
         pass

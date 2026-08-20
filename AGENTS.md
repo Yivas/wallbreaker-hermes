@@ -99,9 +99,10 @@ laboratory. The laboratory is not an operating-system sandbox.
   `method_brief(..., register=)` front-loads the register's lead mechanism. Keep ambiguous
   keywords out of the domain map (bare 'shell' matched both 'reverse shell' and 'shell company'
   -> misrouted finance to cyber; use 'reverse shell'/'web shell' instead).
-- **[sysprompts]**: the leaked product system-prompt corpus lives in `library/system_prompts/`
-  (vendored from asgeirtj/system_prompts_leaks, CC-licensed, Codex agentic dumps + images
-  excluded). `tools/system_prompts.py` reads it recursively; `match_target(model_id)` routes a
+- **[sysprompts]**: an operator-supplied offline product-prompt corpus may be mounted at
+  `library/system_prompts/`; it is not tracked, packaged, or fetched automatically. The operator
+  must review permission and provenance. `tools/system_prompts.py` reads it recursively;
+  `match_target(model_id)` routes a
   target id to the right vendor prompt for native-format mimicry, and `author_persona` auto-
   feeds `format_digest` into its target intel. LESSON: `match_target` MUST return None when no
   vendor token (Codex/gpt/gemini/grok/...) is present in the model id — an early version fuzzy-

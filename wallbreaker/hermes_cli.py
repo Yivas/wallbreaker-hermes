@@ -4,9 +4,8 @@ import argparse
 import asyncio
 import hmac
 import json
+import re
 import sys
-
-from dotenv import load_dotenv
 
 from . import __version__
 from .config import ConfigError, load_config
@@ -16,10 +15,14 @@ from .hermes_campaign import (
     CampaignError,
     CampaignSettings,
     build_campaign_plan,
+    campaign_evidence_path,
     campaign_verification_issues,
     confirmation_fingerprint_salt,
+    delete_campaign_evidence,
+    load_campaign_evidence,
     load_campaign_report,
     load_suite,
+    private_review_entries,
     resume_campaign,
     run_campaign,
     apply_reviews,
@@ -112,6 +115,16 @@ def add_hermes_parser(subparsers) -> None:
         default=[],
         metavar="ATTEMPT=pass|finding",
     )
+    review.add_argument(
+        "--show-evidence",
+        action="store_true",
+        help="Show private review bodies on an interactive local terminal",
+    )
+    review.add_argument(
+        "--delete-evidence",
+        action="store_true",
+        help="Delete private review evidence after strict verification",
+    )
 
     verify = actions.add_parser("verify", help="Verify report structure and closed evidence")
     verify.add_argument("run", help="Campaign report JSON")
@@ -193,7 +206,6 @@ def _run_command(args: argparse.Namespace, writer: EventWriter) -> int:
             {"status": "confirmation_mismatch", "exit_code": 3},
         )
         return 3
-    load_dotenv()
     config = load_config(args.config)
     attacker = config.profile(args.profile)
     settings = _settings(args)
@@ -252,19 +264,67 @@ def _run_command(args: argparse.Namespace, writer: EventWriter) -> int:
     return code
 
 
+def _safe_terminal_text(value: str) -> str:
+    return re.sub(
+        r"[\x00-\x08\x0b-\x1f\x7f-\x9f]",
+        lambda match: f"\\x{ord(match.group()):02x}",
+        value,
+    )
+
+
+def _display_private_reviews(entries: tuple[dict, ...]) -> None:
+    for entry in entries:
+        print(
+            f"\n[private review {entry['attempt_id']} fire {entry['fire_index'] + 1}]",
+            file=sys.stderr,
+        )
+        print(f"Objective:\n{_safe_terminal_text(entry['objective'])}", file=sys.stderr)
+        print(f"\nPrompt:\n{_safe_terminal_text(entry['prompt'])}", file=sys.stderr)
+        print(f"\nResponse:\n{_safe_terminal_text(entry['response'])}", file=sys.stderr)
+
+
 def _review_command(args: argparse.Namespace, writer: EventWriter) -> int:
+    decisions = _parse_decisions(args.decisions) if args.decisions else {}
     report = load_campaign_report(args.run)
+    summary = _summary(report)
+    pending = summary["pending_review_ids"]
+    evidence = (
+        load_campaign_evidence(args.run, report)
+        if args.show_evidence or decisions
+        else None
+    )
+    entries = private_review_entries(report, evidence) if evidence is not None else ()
+    if args.show_evidence:
+        if not pending:
+            raise CampaignError("Campaign has no pending private review evidence.")
+        if not sys.stderr.isatty():
+            raise CampaignError("Private review evidence requires an interactive local terminal.")
+        _display_private_reviews(entries)
     if not args.decisions:
-        summary = _summary(report)
-        code = 2 if summary["pending_review_ids"] else _result_code(report)
-        writer.emit("review.pending", summary)
-        writer.emit("result", {**summary, "exit_code": code})
+        if args.delete_evidence:
+            delete_campaign_evidence(args.run)
+            writer.emit("review.evidence_deleted", {"deleted": True})
+            writer.emit("result", {**summary, "exit_code": 0})
+            return 0
+        code = 2 if pending else _result_code(report)
+        review_data = {
+            **summary,
+            "private_evidence_available": campaign_evidence_path(args.run).is_file(),
+            "private_review_count": len(entries),
+        }
+        writer.emit("review.pending", review_data)
+        writer.emit("result", {**review_data, "exit_code": code})
         return code
-    decisions = _parse_decisions(args.decisions)
     writer.emit("review.started", {"decision_count": len(decisions)})
-    report = apply_reviews(args.run, decisions)
+    report = apply_reviews(
+        args.run,
+        decisions,
+        delete_evidence=args.delete_evidence,
+    )
     code = _result_code(report)
     writer.emit("review.applied", {"decision_count": len(decisions)})
+    if args.delete_evidence:
+        writer.emit("review.evidence_deleted", {"deleted": True})
     writer.emit("result", {**_summary(report), "exit_code": code})
     return code
 
