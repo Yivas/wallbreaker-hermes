@@ -88,13 +88,18 @@ def test_safe_run_path_rejects_symlink_and_traversal(tmp_path):
     from wallbreaker.dashboard.server import _safe_run_path
     sessions = tmp_path / "sessions"
     sessions.mkdir()
-    (sessions / "real.jsonl").write_text("{}")
-    assert _safe_run_path(sessions, "real.jsonl") is not None
+    (sessions / "run-real.jsonl").write_text("{}")
+    assert _safe_run_path(sessions, "run-real.jsonl") is not None
+    assert _safe_run_path(sessions, "run-real") is not None
+    (sessions / "run-extensionless").write_text("{}")
+    assert _safe_run_path(sessions, "run-extensionless") is None
     assert _safe_run_path(sessions, "../secret") is None
     outside = tmp_path / "outside.txt"
     outside.write_text("x")
-    (sessions / "leak.jsonl").symlink_to(outside)
-    assert _safe_run_path(sessions, "leak.jsonl") is None
+    (sessions / "run-leak.jsonl").symlink_to(outside)
+    assert _safe_run_path(sessions, "run-leak.jsonl") is None
+    (sessions / "config.toml").write_text("secret = true")
+    assert _safe_run_path(sessions, "config.toml") is None
 
 
 # ------------------------------------------------------------------------ SEC-9 log redaction
@@ -230,7 +235,10 @@ def test_classify():
 def _client(**kw):
     from fastapi.testclient import TestClient
     from wallbreaker.dashboard.server import create_app
-    return TestClient(create_app(config=None, sessions_dir="sessions", **kw))
+    return TestClient(
+        create_app(config=None, sessions_dir="sessions", **kw),
+        base_url="http://127.0.0.1:8787",
+    )
 
 
 def test_auth_required_rejects_missing_token():
@@ -253,6 +261,13 @@ def test_auth_allows_same_origin_loopback():
     c = _client(require_auth=True, auth_token="secret-tok")
     r = c.get("/api/config", headers={"X-WB-Token": "secret-tok", "Origin": "http://127.0.0.1:8787"})
     assert r.status_code == 200
+
+
+def test_session_rejects_other_loopback_origin():
+    c = _client(require_auth=True, auth_token="secret-tok")
+    response = c.get("/api/session", headers={"Origin": "http://127.0.0.1:9999"})
+    assert response.status_code == 403
+    assert "secret-tok" not in response.text
 
 
 def test_health_and_session_exempt_from_auth():
@@ -491,7 +506,7 @@ def _agent_run_app(monkeypatch, tmp_path, provider_obj, *, run_timeout_s=None):
     )
     registry = ToolRegistry(ToolContext(config=cfg))
     monkeypatch.setattr(factory_mod, "build_provider", lambda _endpoint: provider_obj)
-    monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
+    monkeypatch.setattr(tools_mod, "build_registry", lambda _config, cwd=".": registry)
     app = create_app(config=cfg, sessions_dir=sessions, require_auth=False)
     client = TestClient(app)
     return client, sessions, app

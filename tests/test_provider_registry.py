@@ -217,7 +217,7 @@ def test_dashboard_removes_obsolete_provider_research_state(tmp_path):
     assert json.loads(state_path.read_text(encoding="utf-8")) == {}
 
 
-def test_provider_validation_and_localhost_cors(tmp_path):
+def test_provider_validation_and_cross_origin_preflight(tmp_path):
     client = TestClient(create_app(config=_config(tmp_path), sessions_dir=tmp_path / "sessions"))
     bad = client.put("/api/providers/nope", json={"protocol": "unknown", "model": "x"})
     assert bad.status_code == 400
@@ -225,4 +225,4 @@ def test_provider_validation_and_localhost_cors(tmp_path):
         "Origin": "http://localhost:5173",
         "Access-Control-Request-Method": "GET",
     })
-    assert allowed.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert "access-control-allow-origin" not in allowed.headers

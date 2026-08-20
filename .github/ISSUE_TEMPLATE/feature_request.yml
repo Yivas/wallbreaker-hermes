@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a scoped improvement for authorized LLM security evaluation.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the evaluation need with fictional examples. Do not submit private prompts, active provider configuration, real engagement data, or weaponized material without a clear defensive testing purpose.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What authorized testing or maintenance problem needs to be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest observable change that would solve the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and security considerations
+      description: Note affected commands, APIs, formats, providers, licenses, network behavior, or privacy boundaries.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched open and closed issues for a related proposal.
+          required: true
+        - label: The proposal is for authorized evaluation and has a defensive testing purpose.
+          required: true
+        - label: I used fictional examples and removed sensitive data.
+          required: true

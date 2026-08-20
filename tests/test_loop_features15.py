@@ -5,13 +5,15 @@ from wallbreaker.config import Config, Endpoint, doctor_report
 
 
 def test_doctor_all_ok():
-    ep = Endpoint("p", "openai", "http://x", "m", api_key="k")
-    tgt = Endpoint("target", "openai", "http://y", "mt", api_key="k2")
-    jd = Endpoint("judge", "openai", "http://z", "mj", api_key="k3")
+    secrets = ("attacker-secret-value", "target-secret-value", "judge-secret-value")
+    ep = Endpoint("p", "openai", "http://x", "m", api_key=secrets[0])
+    tgt = Endpoint("target", "openai", "http://y", "mt", api_key=secrets[1])
+    jd = Endpoint("judge", "openai", "http://z", "mj", api_key=secrets[2])
     cfg = Config(default_profile="p", profiles={"p": ep}, target=tgt, judge=jd)
     report, ok = doctor_report(cfg)
     assert ok
     assert "READY" in report
+    assert all(secret not in report for secret in secrets)
 
 
 def test_doctor_flags_missing_default():

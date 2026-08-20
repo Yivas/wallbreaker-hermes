@@ -237,6 +237,35 @@ def test_strip_foreign_reasoning_blocks():
 
 
 @pytest.mark.asyncio
+async def test_reasoning_hygiene_confines_dashboard_paths(tmp_path):
+    from wallbreaker.tools import reasoning_hygiene as mod
+
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("private marker", encoding="utf-8")
+    (workdir / "linked.jsonl").symlink_to(outside)
+    output_target = tmp_path / "output.jsonl"
+    output_target.write_text("keep", encoding="utf-8")
+    (workdir / "output.jsonl").symlink_to(output_target)
+    ctx = _ctx(workdir)
+    ctx.confine_reads = True
+    reg = ToolRegistry(ctx)
+    mod.register(reg)
+
+    scanned = await reg.execute("reasoning_hygiene", {"path": "linked.jsonl", "mode": "scan"})
+    written = await reg.execute(
+        "reasoning_hygiene",
+        {"text": "{}", "mode": "strip", "out_path": "output.jsonl"},
+    )
+
+    assert "read denied" in scanned.content
+    assert "private marker" not in scanned.content
+    assert "write denied" in written.content
+    assert output_target.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.asyncio
 async def test_reasoning_hygiene_tool_scan(tmp_path):
     from wallbreaker.tools import reasoning_hygiene as mod
 

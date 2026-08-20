@@ -7,9 +7,14 @@ from wallbreaker.tools import cluster_findings
 from wallbreaker.tools.registry import ToolContext, ToolRegistry
 
 
-def _reg(judge=None, cwd="."):
+def _reg(judge=None, cwd=".", confine_reads=False):
     cfg = Config(default_profile="t", profiles={})
-    reg = ToolRegistry(ToolContext(config=cfg, judge_endpoint=judge, cwd=cwd))
+    reg = ToolRegistry(ToolContext(
+        config=cfg,
+        judge_endpoint=judge,
+        cwd=cwd,
+        confine_reads=confine_reads,
+    ))
     cluster_findings.register(reg)
     return reg
 
@@ -95,6 +100,24 @@ def test_empty_findings_message(monkeypatch):
     reg = _reg()
     res = asyncio.run(reg.execute("cluster_findings", {}))
     assert "no findings" in res.content.lower()
+
+
+def test_cluster_findings_confines_dashboard_reads(tmp_path):
+    workdir = tmp_path / "workdir"
+    sessions = workdir / "sessions"
+    sessions.mkdir(parents=True)
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("{}\n", encoding="utf-8")
+    (sessions / "run-latest.jsonl").symlink_to(outside)
+    reg = _reg(cwd=str(workdir), confine_reads=True)
+
+    direct = asyncio.run(reg.execute("cluster_findings", {"log": str(outside)}))
+    nested = asyncio.run(reg.execute("cluster_findings", {"dir": "sessions"}))
+
+    assert "read denied" in direct.content
+    assert str(outside) in direct.content
+    assert "read denied" in nested.content
+    assert str(sessions / "run-latest.jsonl") in nested.content
 
 
 def test_label_guard_no_model(monkeypatch):

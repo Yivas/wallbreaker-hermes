@@ -1128,10 +1128,17 @@ def test_dashboard_v2_succeeds_without_hermes_run_log(tmp_path, monkeypatch):
         def __init__(self):
             self.ctx = SimpleNamespace()
 
+        def names(self):
+            return list(self.tools)
+
         async def execute(self, name, args):
             return ToolResult("Synthetic response")
 
-    monkeypatch.setattr(tools, "build_registry", lambda _config: FakeRegistry())
+    monkeypatch.setattr(
+        tools,
+        "build_registry",
+        lambda _config, cwd=".": FakeRegistry(),
+    )
     sessions = tmp_path / "sessions"
     with TestClient(
         create_app(config=config, sessions_dir=sessions, require_auth=False)
@@ -1152,7 +1159,7 @@ def test_dashboard_v2_succeeds_without_hermes_run_log(tmp_path, monkeypatch):
                 break
             time.sleep(0.01)
     assert execution is not None
-    assert execution["status"] == "succeeded"
+    assert execution["status"] == "succeeded", execution["error"]
     assert execution["result"]["run_log"] == ""
     assert not list(sessions.glob("run-*.jsonl"))
 

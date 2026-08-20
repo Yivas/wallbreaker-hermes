@@ -146,6 +146,24 @@ def test_rebuild_and_incremental_upsert_are_idempotent(tmp_path):
         assert index.status()["event_count"] == 2
 
 
+def test_rebuild_rejects_run_log_symlinks(tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text(
+        json.dumps({"kind": "assistant", "text": "private marker"}) + "\n",
+        encoding="utf-8",
+    )
+    (sessions / "run-linked.jsonl").symlink_to(outside)
+
+    with HistoryIndex(tmp_path / "linked.sqlite") as index:
+        status = index.rebuild(sessions)
+        assert status["run_count"] == 0
+        assert index.query_events("private marker")["total"] == 0
+        with pytest.raises(ValueError, match="outside the configured sessions"):
+            index.index_file(sessions / "run-linked.jsonl")
+
+
 def test_incremental_update_prunes_deleted_canonical_runs(tmp_path):
     sessions = tmp_path / "sessions"
     retained = _write_run(sessions, "retained", [{"kind": "user", "text": "keep"}])

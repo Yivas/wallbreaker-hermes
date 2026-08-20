@@ -8,6 +8,7 @@ import zlib
 
 from .. import report
 from ..agent.messages import user
+from .files import _resolve_read
 from .registry import ToolContext, ToolRegistry
 
 _TOKEN = re.compile(r"[a-z0-9]+")
@@ -159,9 +160,21 @@ def _as_json(findings, clusters, threshold, labels, by) -> str:
 async def _cluster_findings(args: dict, ctx: ToolContext) -> str:
     arg = args.get("log") or args.get("path") or args.get("file")
     directory = args.get("dir") or "sessions"
+    if ctx.confine_reads:
+        try:
+            directory = str(_resolve_read(ctx, str(directory)))
+            if arg is not None:
+                arg = str(_resolve_read(ctx, str(arg)))
+        except PermissionError as exc:
+            return f"Error: {exc}"
     path = report.resolve_log_path(arg, directory)
     if path is None and arg is None:
         path = report.resolve_log_path(None, ctx.cwd)
+    if path is not None and ctx.confine_reads:
+        try:
+            path = _resolve_read(ctx, str(path))
+        except PermissionError as exc:
+            return f"Error: {exc}"
 
     findings = report.extract_findings(path if path is not None else "")
     if not findings:

@@ -32,7 +32,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Yivas/wallbreaker-hermes"
+Homepage = "https://yivas.github.io/wallbreaker-hermes/"
+Documentation = "https://yivas.github.io/wallbreaker-hermes/"
 Repository = "https://github.com/Yivas/wallbreaker-hermes"
 Upstream = "https://github.com/JailbrokenAI/wallbreaker"
 Changelog = "https://github.com/Yivas/wallbreaker-hermes/blob/main/CHANGELOG.md"

@@ -1,375 +1,142 @@
-# Wallbreaker Hermes: AI Red-Team Harness
+# Wallbreaker Hermes
 
-```
-██╗    ██╗ █████╗ ██╗     ██╗     ██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗███████╗██████╗
-██║    ██║██╔══██╗██║     ██║     ██╔══██╗██╔══██╗██╔════╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
-██║ █╗ ██║███████║██║     ██║     ██████╔╝██████╔╝█████╗  ███████║█████╔╝ █████╗  ██████╔╝
-██║███╗██║██╔══██║██║     ██║     ██╔══██╗██╔══██╗██╔══╝  ██╔══██║██╔═██╗ ██╔══╝  ██╔══██╗
-╚███╔███╔╝██║  ██║███████╗███████╗██████╔╝██║  ██║███████╗██║  ██║██║  ██╗███████╗██║  ██║
- ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-        break the wall · not the rules of engagement    ⚔  authorized testing only
-```
+[![Red-team gate](https://github.com/Yivas/wallbreaker-hermes/actions/workflows/redteam-gate.yml/badge.svg)](https://github.com/Yivas/wallbreaker-hermes/actions/workflows/redteam-gate.yml)
+[![PyPI](https://img.shields.io/pypi/v/wallbreaker-hermes)](https://pypi.org/project/wallbreaker-hermes/)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
 Wallbreaker Hermes is an AGPL-licensed fork of
-[Wallbreaker](https://github.com/JailbrokenAI/wallbreaker). It preserves the standard
-Wallbreaker harness and adds an opt-in native laboratory target for Hermes Agent runtimes. The
-laboratory uses an ephemeral home but does not provide operating-system sandboxing. Wallbreaker
-provides a Claude-Code-style terminal (CLI command: `wallbreaker`)
-that reasons and calls tools in a loop. The backend is fully configurable, so
-it runs on **OpenRouter**, the **Z.AI GLM coding plan**, the local **Claude Code CLI**, a
-local server, or any OpenAI-/Anthropic-compatible API (including third-party proxies via
-bearer-auth). It ships with a deep red-team toolkit: the **Parseltongue** transform engine,
-the **L1B3RT4S** jailbreak library, the **HarmBench** behavior benchmark, automated attack
-loops (PAIR/TAP, Crescendo, best-of-N), a from-scratch **persona author**, native-format
-target mimicry from an optional operator-supplied offline prompt corpus, a **multimodal
-image-edit attack channel**,
-an LLM judge, and reliability validation.
+[Wallbreaker](https://github.com/JailbrokenAI/wallbreaker) for authorized LLM red-teaming. It
+keeps the standard Wallbreaker harness and adds an opt-in native laboratory for testing a fixed,
+ephemeral Hermes Agent target.
 
-> For authorized security testing only.
+[Documentation](https://yivas.github.io/wallbreaker-hermes/) ·
+[PyPI](https://pypi.org/project/wallbreaker-hermes/) ·
+[Releases](https://github.com/Yivas/wallbreaker-hermes/releases) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-## Project status
+## Scope and status
 
-The standard Wallbreaker CLI, TUI, dashboard, MCP server, attack tools, judge, and reliability
-validation work as documented below. The Hermes laboratory adapter targets the fixed Hermes Agent
-`v2026.8.13` revision. It supports one text turn with a clean home or selected SOUL, memory, and
-working-directory rules. It rejects tools, MCP, custom prompt layers, profiles, prefill,
-continuation, and multimodal input. See [Hermes Native Laboratory](docs/HERMES_LAB.md). The
-campaign API and `wallbreaker hermes run|review|verify` CLI load versioned YAML suites, run isolated
-repetitions through the existing autonomous loop, write a sanitized HMAC-scoped report, and keep
-human-review bodies in a separate permission-restricted sidecar. The optional operator skill lives
-under `integrations/hermes/` and never opens that private evidence.
+- **Current release:** `v0.3.0` / `wallbreaker-hermes==0.3.0`.
+- **Python:** 3.11 or newer.
+- **Project mode:** open source collaborative. In-scope issues and pull requests are welcome.
+- **Hermes baseline:** Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
 
-The PyPI distribution is `wallbreaker-hermes`. The import package and commands remain
-`wallbreaker` and `wb` for upstream compatibility.
+The standard CLI, TUI, dashboard, provider layer, attack tools, judge, reports and reliability
+checks remain available. The Hermes laboratory supports one text turn against a clean home or a
+selected, sanitized context. It rejects target tools, MCP, custom prompt layers, profiles, prefill,
+continuation and multimodal input.
 
-## Highlights
-
-- **Dual-protocol provider layer:** OpenAI Chat Completions + Anthropic Messages, any
-  `base_url`/model. Captures reasoning/thinking channels; converts network errors to
-  clean failures (no crashes on timeout).
-- **Autonomous attack loop:** keeps mutating/re-firing until it succeeds (`finish()`
-  exits the tool) or needs you (`ask_operator()`).
-- **Standardized, unbiased prompts:** pulls test batteries from **HarmBench** (400
-  behaviors, 7 categories) instead of hand-picked examples.
-- **Reliability-first:** `validate` re-fires N times for the real success rate; a
-  one-shot COMPLIED is never called a "bypass". Pin the OpenRouter backend for
-  reproducibility.
-- **Parseltongue:** 59 chainable transforms (encodings, unicode fonts, stego, homoglyph,
-  zero-width, tag smuggling, bijection, gibberish…) plus `mutate` (LLM anti-classifier).
-- **P4RS3LT0NGV3 over MCP:** an optional MCP server wraps elder-plinius's upstream
-  Parseltongue: **all 222 transforms** (45 ciphers, runic/braille/symbol scripts, every
-  encoding, steganography) + a universal decoder, exposed as `parsel_*` tools the agent
-  drives directly. Any `[[mcp.servers]]` you configure is proxied into the tool registry.
-- **Single-artifact convergence:** `/sysprompt` + `system_sweep` + `optimize_universal`
-  converge on ONE universal system prompt; they can't split into variant toolkits.
-- **Persona author (`author_persona`):** writes a full devoted-persona system-prompt
-  jailbreak from scratch via the codified ENI method (draft → self-critique → validate →
-  refine → distill), auto-picking a credentialed-authority or limerence register from the
-  objective's domain.
-- **Native-format mimicry:** `sysprompt_*` tools can search an operator-supplied offline product
-  prompt corpus and hand a matched section-tag/heading dialect to the persona author. Wallbreaker
-  does not ship or fetch that corpus; the operator is responsible for permission and provenance.
-- **Multimodal image channel:** `query_image_edit` fires an image + instruction at an image
-  target and vision-judges the result; `image_chain` runs a Chain-of-Jailbreak, decomposing a
-  refused image into a ladder of benign edit steps. Plus Tier-3 T2I framing transforms.
-- **Pluggable attacker brains:** OpenAI/Anthropic APIs, or the local **Claude Code CLI**
-  (`protocol = "claude-code"`, keyless) as the red-team brain. Third-party Anthropic proxies
-  work via `auth_style = "bearer"`.
-- **Extended attack arsenal (this fork):** `cipherchat` (CipherChat/SelfCipher, ICLR
-  2024) teaches the target a cipher in-band then fires in ciphertext; `skeleton_key`
-  (Russinovich 2024) reframes the guardrail as a policy amendment with a "Warning:"
-  label; `persuasion_attack` (PAP, Zeng 2024) rewrites the ask through 16 persuasion
-  strategies concurrently and ranks bypasses; `drattack` (Li 2024) decomposes the
-  objective into benign fragments then reassembles; `ica` (Wei 2023) packs N harmful
-  Q/A demos into a single in-context turn.
-
-
-## Clone Repository 
-```
-git clone https://github.com/Yivas/wallbreaker-hermes
-
-cd wallbreaker-hermes
-```
+The laboratory is **not an operating-system sandbox**. Its child process retains the filesystem and
+network permissions of the account that runs it.
 
 ## Install
 
-Install the release from PyPI:
+Install the published package:
 
 ```bash
-pip install wallbreaker-hermes
+python -m pip install wallbreaker-hermes==0.3.0
+wallbreaker --help
 ```
 
-For local development from a clone:
+The distribution name is `wallbreaker-hermes`. The import package and commands remain
+`wallbreaker` and `wb` for compatibility with upstream.
+
+For development:
 
 ```bash
+git clone https://github.com/Yivas/wallbreaker-hermes.git
+cd wallbreaker-hermes
 python -m venv .venv
 . .venv/bin/activate
-pip install -e ".[dev]"        # add [barcodes] for the QR/barcode tool
-```
-
-## Configure
-
-```bash
-cp config.example.toml config.toml   # add your keys (config.toml is gitignored)
-wallbreaker check                            # validate it: profiles, keys, target, judge
-```
-
-Profiles set the attacker brain; `[target]` is the model under attack; `[judge]` grades
-replies. Keys can be inline or from env. OpenRouter endpoints support `provider` pinning
-and a `timeout` override.
-
-Hermes Agent targets use `protocol = "hermes-lab"` with a dedicated checkout, Python
-interpreter, provider credential environment variable, and closed manifest. They remain opt-in
-and do not change any standard target defaults. See [Hermes Native Laboratory](docs/HERMES_LAB.md)
-and the [operator skill](integrations/hermes/README.md).
-
-```toml
-default_profile = "glm"
-
-[profiles.glm]
-protocol = "openai"
-base_url = "https://api.z.ai/api/paas/v4"
-api_key  = "..."
-model    = "glm-4.6"
-
-[target]
-protocol = "openai"
-base_url = "https://openrouter.ai/api/v1"
-api_key  = "sk-or-..."
-model    = "deepseek/deepseek-v4-pro"
-# provider = "WandB"   # pin the backend for reproducible results
-# timeout  = 60        # seconds (default 120)
-
-[judge]
-protocol = "openai"
-base_url = "https://openrouter.ai/api/v1"
-api_key  = "sk-or-..."
-model    = "openai/gpt-4o-mini"
-```
-
-**Attacker-brain options:**
-
-```toml
-# Local Claude Code CLI as the attacker brain, keyless (the CLI self-auths).
-[profiles.claude-code]
-protocol = "claude-code"
-model    = "sonnet"
-# system_prompt_file = "operator.md"   # optional: leads the harness tool doctrine
-
-# Third-party Anthropic-compatible proxy that wants an OpenAI-style bearer token.
-[profiles.proxy]
-protocol   = "anthropic"
-base_url   = "https://your-proxy.example"     # host root; provider appends /v1/messages
-api_key    = "..."
-model      = "claude-sonnet-4"
-auth_style = "bearer"                          # Authorization: Bearer <key> (default: x-api-key)
-```
-
-### P4RS3LT0NGV3 engine (native)
-
-The full upstream **P4RS3LT0NGV3** engine (222 transforms across 11 categories plus the
-universal decoder) is wired straight into the agent registry as native `parsel_*` tools
-(`parsel_list`/`search`/`inspect`/`transform`/`chain`/`decode`/`guide`/`craft`). No MCP
-server or config block is required; the tools appear automatically once the repo is vendored
-and Node.js is on PATH. One-time setup:
-
-```bash
-wallbreaker parsel update        # git-clone elder-plinius/P4RS3LT0NGV3 into library/ (needs Node.js)
-wallbreaker parsel list          # sanity-check: prints all 222 transforms by category
-```
-
-If Node is missing, the pure-Python `parseltongue` tool (50+ transforms) remains as an
-offline fallback. Override the vendored location with `PARSEL_REPO=/abs/path/to/P4RS3LT0NGV3`.
-
-### MCP servers (optional)
-
-The harness is also an MCP client: every `[[mcp.servers]]` you declare is spawned over stdio
-at startup and its tools are proxied into the registry. The same P4RS3LT0NGV3 engine is still
-available as an MCP server if you prefer to run it out-of-process (it re-registers the same
-`parsel_*` names with identical behaviour):
-
-```toml
-[[mcp.servers]]
-name    = "parsel"
-command = "python"
-args    = ["-m", "p4rs3lt0ngv3_mcp"]
-enabled = false                                       # native tools already cover this
-# tool_prefix = "p_"                                  # optional namespace for the proxied tools
-# env = { PARSEL_REPO = "/abs/path/to/P4RS3LT0NGV3" } # override the vendored repo location
-```
-
-No `npm install`/build is needed; the server drives the upstream Node bridge headlessly.
-In the TUI, `/parsel guide|list|search <q>|inspect <key>` browses the catalog. The server is
-a standalone stdio MCP server, so any MCP client (Claude Code, Cursor) can use it too.
-
-## Launch
-
-```bash
-wallbreaker                       # TUI on default_profile
-wallbreaker --profile openrouter
-wallbreaker --auto "objective..." # one-shot autonomous run
-wallbreaker --resume              # reopen the autosaved session (survives a crash/Ctrl+C)
-```
-
-The TUI autosaves the whole engagement to `sessions/autosave.json` after every turn;
-`--resume` reopens it (or pass a specific session file: `wallbreaker --resume mysession.json`).
-
-## Picking the model to attack
-
-`/model` changes the attacker brain; `/target` changes the victim.
-
-```
-/target anthropic/claude-3.7-sonnet   attack any model on the target endpoint
-/target glm                           attack via a profile
-/provider WandB                       pin the OpenRouter backend (reproducibility)
-```
-
-## Finding ONE universal prompt (the right way)
-
-A "one prompt for every task" goal means a single fixed artifact, not a toolkit.
-
-```
-/sysprompt set <one system prompt>    hold ONE fixed system prompt
-/sysprompt test                       sweep it across the HarmBench cyber battery
-/validate <task>                      re-fire 8x for the REAL success rate
-```
-
-Read which tasks failed → refine the **one** prompt → `/sysprompt test` again. A single
-COMPLIED is luck; `validate` tells you the truth. For the user-turn variant use
-`/template set … {request}` + `/template test`.
-
-## Agent tools (`/tools` lists them live)
-
-| tool | purpose |
-|------|---------|
-| `run_shell`, `read_file`, `write_file`, `edit_file` | build/run/save payloads |
-| `parseltongue`, `parseltongue_catalog`, `mutate` | obfuscate / anti-classifier rewrite |
-| `parsel_*` (native) | full P4RS3LT0NGV3 engine: `parsel_guide`/`list`/`search`/`inspect`/`transform`/`chain`/`decode`: 222 transforms + universal decoder. `parsel_craft` builds a ready-to-fire payload (encode a request through a chain + wrap it decode-and-comply / split-into-vars) |
-| `l1b3rt4s_*`, `eni_*` | jailbreak libraries: L1B3RT4S + the ENI persona collection |
-| `author_persona` | author a full devoted-persona system prompt from scratch (ENI method: draft→critique→validate→refine→distill), auto-picking an authority/limerence register from the objective's domain |
-| `sysprompt_list`, `sysprompt_search`, `sysprompt_get`, `sysprompt_native` | browse an optional operator-supplied offline prompt corpus; `sysprompt_native` derives formatting hints for native mimicry without shipping or fetching corpus content |
-| `harmbench`, `preset` | unbiased behavior benchmark, curated seed templates |
-| `query_target` | fire at the model-under-test (with `transforms=[...]` to encode+fire) |
-| `query_image_edit` | fire an input image + instruction at an IMAGE target (`modality='image'`) and vision-judge the edited picture |
-| `image_chain` | Chain-of-Jailbreak: decompose a refused image into a ladder of individually-benign edit steps and drive them in sequence |
-| `multi_fire` | sweep one payload through many encodings (concurrent) |
-| `crescendo` | multi-turn escalation |
-| `pair_attack` | PAIR/TAP: refine one objective on the target's refusals |
-| `pair_sweep` | run the PAIR loop across a whole battery concurrently (highest-ASR, batched) |
-| `best_of_n` | resample N times, keep the bypass |
-| `many_shot` | many-shot jailbreak: flood context with faux compliant turns, then fire |
-| `prefill` | response-priming: seed the assistant's own reply so it continues, not refuses |
-| `narrate` | fiction-frame + in-story prefill (novel-chapter roleplay); tops the scoreboard |
-| `diff_fire` | A/B two payloads at one target to attribute ASR to a specific edit |
-| `recommend_transforms` | survey ~16 encodings, rank by bypass, synthesize a chain to try |
-| `seed_sweep` | inject one request through many ENI+L1B3RT4S seeds, rank which bypass |
-| `fire_file` | fire a file/seed RAW (verbatim, full-length) as the target system prompt |
-| `adapt_seed` | attacker-LLM patches a persona for a specific refusal (don't use it to distill) |
-| `campaign` | auto-escalate a HarmBench battery up a technique ladder, coverage matrix |
-| `leaderboard` | rank multiple profiles by ASR on one battery (robustness benchmark) |
-| `leak_scan` | scan a reply for secrets/PII/system-prompt echo (evidence, not a verdict) |
-| `scan` | Garak-style coverage matrix (technique + HarmBench probes) |
-| `indirect_inject` | RAG/agent injection via document/email/tool-output carriers |
-| `system_sweep` | validate ONE system prompt across a task battery (multi-sample) |
-| `optimize_universal` | hill-climb one template (user or `slot='system'`) |
-| `judge_response`, `validate` | LLM judge a reply / measure the real success rate |
-| `judge_selftest` | calibrate the grader on benign fixtures before trusting ASR |
-| `http_request`, `barcode` | raw delivery / QR+barcode encoding |
-| `finish`, `ask_operator` | stop the tool / pause for the operator |
-
-## Slash commands
-
-```
-/profile /target /provider /model /judge [model]   endpoints & grader
-/auto /autoexit /rounds                            autonomous loop
-/objective /template /sysprompt /validate /replay  campaign + reliability
-/transforms /encode /diff /campaign /leaderboard   arsenal, auto-sweep & benchmark
-/find /tools /preset /lib /parsel /eni /harmbench  search & libraries
-/log /asr /stats /findings /repro /export /report  logging, scoreboard, repro, CI export
-Ctrl+S report · Ctrl+Y copy payload · Ctrl+T stats · Ctrl+R repro · Ctrl+L clear
-```
-
-## Logging & reports
-
-Every payload, reply, and verdict goes to `sessions/run-<ts>.jsonl`. `/findings` lists the
-bypasses; `/report [html]` writes a markdown or styled-HTML findings doc; `/repro [n]`
-copies a repro pack; `/export` dumps structured findings JSON; `/session save|load`
-persists the whole engagement (history, objective, template, system prompt).
-
-## Headless / CI
-
-Render reports and gate builds straight from a run log, no TUI. The log arg is optional:
-omit it (or pass a directory) and the newest `sessions/run-*.jsonl` is used:
-
-```bash
-wallbreaker report                       # markdown for the latest run, to stdout
-wallbreaker report --html --out report.html
-wallbreaker export --out findings.json   # structured findings JSON
-wallbreaker export --fail-on-finding     # exit 2 if any bypass -> fails CI
-```
-
-An opt-in live example lives at `docs/examples/redteam-gate.yml`. It is outside
-`.github/workflows` so cloning the repository cannot schedule provider calls.
-
-## Test
-
-```bash
+python -m pip install -e ".[dev]"
 pytest -q
 ```
 
-## Web dashboard
+On Windows PowerShell, activate the environment with `.\.venv\Scripts\Activate.ps1`.
 
-A browser dashboard ships alongside the TUI (FastAPI backend + React/Vite SPA). WebUI V2
-uses the same capability catalog and application services as the TUI, and adds a
-server-owned execution queue, resumable event streams, persistent multi-turn composition,
-workflow sequencing, provider/profile management, and current or historical evidence
-inspection. **Agent** is dedicated to the autonomous Attack → Target → Judge loop;
-**Live** provides the holistic-to-granular observability surface.
+## First use
 
-![Wallbreaker attack console](docs/images/dashboard-console.png)
-
-<details>
-<summary>More views: arsenal</summary>
-
-![Arsenal](docs/images/dashboard-arsenal.png)
-
-</details>
+Copy the example configuration, add credentials for providers you are authorized to use, then run
+the preflight check:
 
 ```bash
-pip install "wallbreaker-hermes[dashboard]"          # FastAPI + uvicorn
-wallbreaker dashboard                                # binds to 127.0.0.1:8787
+cp config.example.toml config.toml
+wallbreaker check
+wallbreaker
 ```
 
-The wheel includes the compiled dashboard. Contributors using an editable clone can rebuild it
-with `npm ci && npm run build` under `wallbreaker/dashboard/web`.
+`config.toml` is ignored by Git. Do not commit credentials, prompts, responses, reports, session
+state or generated evidence.
 
-Open WebUI V2 at <http://127.0.0.1:8787/v2>. The original dashboard remains available at
-<http://127.0.0.1:8787/legacy> during the parity rollout. The backend reuses the same
-engine as the TUI. For frontend hot-reload, run `npm run dev` in
-`wallbreaker/dashboard/web`; it proxies `/api` to the dashboard backend.
+Common entry points:
 
-See the [setup guide](docs/SETUP.md) for Windows instructions, provider configuration,
-history storage, development workflow, network-exposure safeguards, and troubleshooting.
-See [Upstream maintenance](docs/UPSTREAM.md) for the update and rollback procedure.
+```bash
+wallbreaker                         # terminal UI
+wallbreaker dashboard               # local dashboard on 127.0.0.1:8787
+wallbreaker --auto "objective..."   # autonomous loop against the configured target
+wallbreaker report                  # render the latest local run
+wallbreaker hermes --help           # Hermes laboratory workflow
+```
 
-## Responsible use
+See the [installation guide](https://yivas.github.io/wallbreaker-hermes/getting-started/installation-and-setup/)
+and [configuration guide](https://yivas.github.io/wallbreaker-hermes/getting-started/configuration/)
+for provider, dashboard and platform details.
 
-Wallbreaker is for **authorized** LLM red-teaming and safety evaluation only: your own
-models, or targets you have explicit permission to test. Run logs and generated
-artifacts can contain harmful content; they're written to gitignored `wb_runs/`,
-`wb_artifacts/`, and `findings/`. Dataset updates and configured provider calls use the
-network; an optional `[art]` endpoint also receives scorecard labels and results. See
-[SECURITY.md](SECURITY.md) for the full policy and vulnerability-reporting channel.
+## Main capabilities
 
-## Contributing
+- OpenAI Chat Completions and Anthropic Messages provider normalization.
+- Interactive and autonomous attack workflows with operator pause and explicit finish controls.
+- HarmBench-backed evaluation, LLM judging and repeated reliability checks.
+- Transform, preset, persona, multimodal, campaign and report tooling inherited from Wallbreaker.
+- Optional P4RS3LT0NGV3 integration and generic MCP client support.
+- Local FastAPI and React/Vite dashboard using the same application services as the TUI.
+- Opt-in Hermes Agent laboratory with clean replicas, closed manifests, state comparison and
+  permission-restricted evidence for local human review.
 
-Setup, architecture, and house rules are in [CONTRIBUTING.md](CONTRIBUTING.md). Run
-`pytest -q` before a PR; the suite is the contract.
+The documentation describes each capability without relying on private prompts, operational
+profiles or unpublished corpora.
 
-## License
+## Security and privacy
 
-[AGPL-3.0-or-later](LICENSE). Wallbreaker is copyleft: any modified version (**including
-one you run as a network/hosted service**) must make its complete corresponding source
-available under the same license. Third-party corpora and benchmark rows are fetched only when
-requested and are not redistributed; see [NOTICE](NOTICE) and
-[External data sources](docs/EXTERNAL_DATA.md).
+Use Wallbreaker Hermes only against systems you own or have explicit permission to test. Provider
+calls, target calls, judge calls and requested dataset updates can use the network. Run logs and
+reports may contain sensitive or harmful material even though their default locations are ignored
+by Git.
+
+The Hermes campaign report is sanitized. When human review is required, prompt and response bodies
+are stored separately in a local permission-restricted sidecar. Hermes Agent does not receive or
+open that evidence.
+
+Read [SECURITY.md](SECURITY.md) before exposing the dashboard, running untrusted targets or sharing
+artifacts. Report vulnerabilities through GitHub Private Vulnerability Reporting, not a public
+issue.
+
+## Documentation
+
+The maintained documentation is published at
+<https://yivas.github.io/wallbreaker-hermes/>. Source files live under `wiki/`.
+
+Repository-level references remain under [`docs/`](docs/README.md), including external-data
+attribution and examples that must stay close to the code. The operator integration and skill live
+under [`integrations/hermes/`](integrations/hermes/README.md).
+
+## Support and contributing
+
+Use [GitHub Issues](https://github.com/Yivas/wallbreaker-hermes/issues) for reproducible bugs and
+scoped proposals. Pull requests are reviewed when they fit the project, preserve upstream
+compatibility and include the relevant tests and documentation. The project does not promise a
+response time or support for unauthorized testing.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a
+pull request.
+
+## License and upstream
+
+Wallbreaker Hermes is licensed under [AGPL-3.0-or-later](LICENSE). Modified versions, including
+versions offered over a network, must provide their complete corresponding source under the same
+license.
+
+This repository preserves the Wallbreaker history and attribution. Third-party datasets and prompt
+corpora are not bundled automatically; their provenance and terms are documented in [NOTICE](NOTICE)
+and the [external-data reference](docs/EXTERNAL_DATA.md).

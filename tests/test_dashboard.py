@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from wallbreaker.dashboard.server import create_app  # noqa: E402
+from wallbreaker.dashboard.server import _safe_run_path, create_app  # noqa: E402
 
 
 def _sessions(tmp_path):
@@ -114,6 +114,9 @@ def test_run_detail_path_guard(tmp_path):
     assert ok.status_code == 200 and ok.json()["total"] == 3
     bad = client.get("/api/runs/..%2f..%2fetc%2fpasswd")
     assert bad.status_code == 404
+    sessions = tmp_path / "sessions"
+    assert _safe_run_path(sessions, "C:run.jsonl") is None
+    assert _safe_run_path(sessions, "run.jsonl:stream") is None
 
 
 def test_fire_requires_target(tmp_path):
@@ -303,7 +306,7 @@ def test_agent_run_logs_full_scaffold_inference_and_tools(monkeypatch, tmp_path)
         finish,
     )
     monkeypatch.setattr(factory_mod, "build_provider", lambda _endpoint: FakeProvider(attacker))
-    monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
+    monkeypatch.setattr(tools_mod, "build_registry", lambda _config, cwd=".": registry)
 
     client = TestClient(create_app(config=cfg, sessions_dir=sessions, require_auth=False))
     with client.stream("POST", "/api/agent/run", json={

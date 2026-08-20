@@ -1,0 +1,40 @@
+---
+title: Wallbreaker Hermes
+description: Authorized LLM red-teaming with an opt-in native Hermes Agent laboratory.
+hero:
+  tagline: Run the Wallbreaker harness against authorized LLM targets, including a fixed and ephemeral Hermes Agent replica.
+  actions:
+    - text: Install and configure
+      link: /wallbreaker-hermes/getting-started/installation-and-setup/
+      icon: right-arrow
+    - text: Hermes laboratory
+      link: /wallbreaker-hermes/guides/hermes-laboratory/
+      variant: minimal
+---
+
+Wallbreaker Hermes preserves the standard Wallbreaker CLI, TUI, dashboard, provider layer, attack
+tools, judge and reporting workflow. Its additional Hermes laboratory is opt-in and validated against
+one declared Hermes Agent baseline.
+
+## Start with the boundary
+
+Use the project only against systems you own or have explicit permission to test. The harness and
+laboratory run with your local account's filesystem and network permissions. An ephemeral target
+home limits retained application state; it does not create an operating-system sandbox.
+
+## Choose a path
+
+- [Install and configure](/wallbreaker-hermes/getting-started/installation-and-setup/) the published
+  `wallbreaker-hermes` package.
+- Use the [dashboard](/wallbreaker-hermes/guides/dashboard/) for local operation and evidence
+  inspection.
+- Read the [Hermes laboratory contract](/wallbreaker-hermes/guides/hermes-laboratory/) before
+  configuring a Hermes target.
+- Run [campaigns and human review](/wallbreaker-hermes/guides/hermes-campaigns-and-review/) only
+  after the dry run and authorization gates pass.
+- Check [security and privacy](/wallbreaker-hermes/project/security-and-privacy/) before handling
+  reports or exposing a local service.
+
+The current release is `v0.3.0`. The Hermes integration is validated against Hermes Agent
+`v2026.8.13`, package `0.20.1`, commit
+`f80f453ae0679347e38abc917c7f94f717bf96c5`.

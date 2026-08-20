@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Changed
+
+- Replaced the repository entry point with a concise supported-release guide and moved maintained
+  user documentation to a versioned Starlight site.
+- Added the community profile, structured issue forms, pull request guidance, dependency updates,
+  GitHub Pages workflow and explicit security-reporting boundaries.
+
+### Fixed
+
+- Confined dashboard report selection to existing logs under the configured sessions directory.
+- Applied the dashboard read-confinement policy to `cluster_findings` log and directory inputs.
+- Restricted dashboard run identifiers to portable filename characters before filesystem access.
+
+### Security
+
+- Removed agent rules, operational audits, specs and internal work notes from the active public tree.
+- Added explicit read-only permissions to the red-team gate workflow and documented the disposition
+  of CodeQL false positives separately from the confirmed dashboard path issue.
+
 ## 0.3.0 - 2026-08-20
 
 ### Added

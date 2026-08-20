@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .. import __version__, report as report_mod
 from ..agent.messages import user
+from ..history_index import safe_run_paths
 from ..presets import list_presets
 from ..providers.factory import build_provider
 from ..transforms import TRANSFORMS, apply_chain, list_transforms
@@ -151,11 +152,16 @@ def _models_for_finding(record: dict, run_models: dict) -> dict:
 
 
 def _safe_run_path(sessions: Path, name: str) -> Path | None:
-    if ".." in name or "/" in name or "\\" in name or name in ("", ".", ".."):
+    if not re.fullmatch(r"run-[A-Za-z0-9][A-Za-z0-9._-]{0,250}", name):
         return None
-    candidate = sessions / name
-    if not candidate.is_file() and not Path(name).suffix:
-        candidate = sessions / f"{name}.jsonl"
+    if ".." in name or Path(name).suffix not in {"", ".jsonl"}:
+        return None
+    candidate = sessions / (name if Path(name).suffix == ".jsonl" else f"{name}.jsonl")
+    try:
+        if candidate.is_symlink() or candidate.stat().st_nlink != 1:
+            return None
+    except OSError:
+        return None
     if not candidate.is_file():
         return None
     base = os.path.realpath(sessions)
@@ -415,7 +421,7 @@ def _finding_run_summaries(sessions: Path) -> list[dict]:
     if not sessions.is_dir():
         return []
     out = []
-    for path in sorted(sessions.glob("run-*.jsonl"), reverse=True):
+    for path in reversed(safe_run_paths(sessions)):
         try:
             records = report_mod._load_records(path)
             findings_count = sum(
@@ -875,7 +881,6 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[],
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -895,17 +900,21 @@ def create_app(
         return JSONResponse(status_code=500, content={"detail": "internal server error"})
 
     def _latest():
-        return report_mod.latest_run_log(sessions)
+        paths = safe_run_paths(sessions)
+        return paths[-1] if paths else None
 
     @app.get("/api/health")
     def health():
         return {"ok": True, "name": "wallbreaker", "version": __version__}
 
     @app.get("/api/session")
-    def session_bootstrap(origin: str | None = Header(default=None)):
+    def session_bootstrap(
+        origin: str | None = Header(default=None),
+        host: str | None = Header(default=None),
+    ):
         from .auth import origin_is_same_site
 
-        if require_auth and not origin_is_same_site(origin):
+        if require_auth and not origin_is_same_site(origin, host):
             raise HTTPException(status_code=403, detail="cross-site request blocked")
         return {
             "authenticated": bool(require_auth),
@@ -1233,7 +1242,7 @@ def create_app(
                 findings_count = len(_findings_for_run(log))
             except Exception:
                 findings_count = 0
-        runs = sorted(sessions.glob("run-*.jsonl")) if sessions.is_dir() else []
+        runs = safe_run_paths(sessions)
         return {
             "config": _config_summary(config),
             "scorecard": scorecard,
@@ -1247,7 +1256,7 @@ def create_app(
         if not sessions.is_dir():
             return []
         out = []
-        for p in sorted(sessions.glob("run-*.jsonl"), reverse=True):
+        for p in reversed(safe_run_paths(sessions)):
             try:
                 raw = report_mod._load_records(p)
                 records = normalize_inference_records(raw)
@@ -1342,9 +1351,13 @@ def create_app(
         if config is None:
             return []
         try:
-            from ..tools import build_registry
+            from ..tools.tool_policy import build_dashboard_registry
 
-            reg = build_registry(config)
+            reg = build_dashboard_registry(
+                config,
+                cwd=str(sessions),
+                allow_host_tools=getattr(app.state, "allow_host_tools", False),
+            )
             return [
                 {
                     "name": spec["name"],
@@ -1670,7 +1683,9 @@ def create_app(
 
         base_provider = build_provider(brain)
         registry = build_dashboard_registry(
-            run_config, allow_host_tools=getattr(app.state, "allow_host_tools", False)
+            run_config,
+            cwd=str(sessions),
+            allow_host_tools=getattr(app.state, "allow_host_tools", False),
         )
         enabled_raw = body.get("enabled_techniques")
         if enabled_raw is not None:
@@ -1926,14 +1941,18 @@ def create_app(
             raise RuntimeError("no config loaded")
         from ..agent_profiles import resolved_config
         from ..state import load_state, state_path_for
-        from ..tools import build_registry
         from ..session import RunLog, inference_logging, run_models_meta
+        from ..tools.tool_policy import build_dashboard_registry
 
         run_config, role_meta = resolved_config(config)
         run_config = _apply_target_settings(
             run_config, load_state(state_path_for(config)), config
         )
-        registry = build_registry(run_config)
+        registry = build_dashboard_registry(
+            run_config,
+            cwd=str(sessions),
+            allow_host_tools=getattr(app.state, "allow_host_tools", False),
+        )
         tool_name = capability_id.removeprefix("tool.")
         if tool_name not in registry.tools:
             raise ValueError(f"unknown tool capability '{tool_name}'")
@@ -2077,7 +2096,7 @@ def create_app(
                 specs = [item for item in specs if raw.lower() in json.dumps(item).lower()]
             return {"items": specs, "kind": "tools"}
         if command in {"asr", "stats", "findings", "export", "report"}:
-            path = report_mod.resolve_log_path(raw or None, sessions)
+            path = _safe_run_path(sessions, raw) if raw else _latest()
             if path is None:
                 raise ValueError("no run log found")
             if command in {"asr", "stats"}:
@@ -2214,27 +2233,36 @@ def create_app(
     def capabilities_get():
         try:
             from ..capabilities import merge_tool_capabilities, serialize_capabilities
-            from ..tools import build_registry
+            from ..tools.tool_policy import build_dashboard_registry
 
             capabilities = (
-                merge_tool_capabilities(build_registry(config))
+                merge_tool_capabilities(build_dashboard_registry(
+                    config,
+                    cwd=str(sessions),
+                    allow_host_tools=getattr(app.state, "allow_host_tools", False),
+                ))
                 if config is not None else None
             )
             return serialize_capabilities(capabilities) if capabilities is not None else serialize_capabilities()
         except ImportError:
             # The endpoint remains useful during source-only installations where
             # the optional TUI dependency is unavailable.
-            from ..tools import build_registry
+            from ..tools.tool_policy import build_dashboard_registry
 
             if config is None:
                 return []
+            registry = build_dashboard_registry(
+                config,
+                cwd=str(sessions),
+                allow_host_tools=getattr(app.state, "allow_host_tools", False),
+            )
             return [
                 {
                     "id": f"tool.{name}", "title": name.replace("_", " ").title(),
                     "category": "tools", "execution_mode": "background",
                     "cancellable": True,
                 }
-                for name in build_registry(config).names()
+                for name in registry.names()
             ]
 
     @app.post("/api/v2/executions")

@@ -30,6 +30,18 @@ def test_v2_capabilities_include_every_tui_command(tmp_path):
     assert represented == set(TUI_SOURCE.known_commands)
 
 
+def test_v2_capabilities_apply_dashboard_tool_policy(tmp_path):
+    endpoint = Endpoint("test", "openai", "https://example.invalid/v1", "model", api_key="key")
+    config = Config(default_profile="test", profiles={"test": endpoint})
+    payload = TestClient(create_app(config=config, sessions_dir=tmp_path / "sessions")).get(
+        "/api/v2/capabilities"
+    ).json()
+    ids = {item["id"] for item in payload["capabilities"]}
+    assert "tool.query_target" in ids
+    assert "tool.run_shell" not in ids
+    assert "tool.read_file" not in ids
+
+
 def test_provider_test_requires_authenticated_inference(tmp_path, monkeypatch):
     endpoint = Endpoint(
         name="strict-test", protocol="openai", base_url="https://example.test/v1",
@@ -161,6 +173,87 @@ def test_v2_runs_headless_tui_catalog_capability(tmp_path):
             time.sleep(0.01)
         assert execution["status"] == "succeeded"
         assert "/session" in execution["result"]["content"]
+
+
+def test_v2_report_capability_rejects_paths_outside_sessions(tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text("{}\n", encoding="utf-8")
+    (sessions / "run-latest.jsonl").symlink_to(outside)
+    with TestClient(create_app(config=None, sessions_dir=sessions)) as client:
+        for arguments in (str(outside), ""):
+            created = client.post(
+                "/api/v2/executions",
+                json={
+                    "capability_id": "tui.report",
+                    "args": {"arguments": arguments},
+                    "mode": "background",
+                },
+            )
+            assert created.status_code == 200
+            execution_id = created.json()["id"]
+            for _ in range(50):
+                execution = client.get(f"/api/v2/executions/{execution_id}").json()
+                if execution["status"] in {"succeeded", "failed", "cancelled"}:
+                    break
+                time.sleep(0.01)
+            assert execution["status"] == "failed"
+            assert "no run log found" in execution["error"]
+
+
+def test_v2_tool_capability_confines_reads(tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    outside = tmp_path / "outside.jsonl"
+    outside.write_text(
+        json.dumps({"kind": "verdict", "label": "COMPLIED", "payload": "private"}) + "\n",
+        encoding="utf-8",
+    )
+    endpoint = Endpoint("test", "openai", "https://example.invalid/v1", "model", api_key="key")
+    config = Config(default_profile="test", profiles={"test": endpoint})
+    with TestClient(create_app(config=config, sessions_dir=sessions)) as client:
+        created = client.post(
+            "/api/v2/executions",
+            json={
+                "capability_id": "tool.cluster_findings",
+                "args": {"log": str(outside), "json": True},
+                "mode": "background",
+            },
+        )
+        assert created.status_code == 200
+        execution_id = created.json()["id"]
+        for _ in range(50):
+            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            if execution["status"] in {"succeeded", "failed", "cancelled"}:
+                break
+            time.sleep(0.01)
+        assert execution["status"] == "succeeded"
+        assert "read denied" in execution["result"]["content"]
+        assert "private" not in execution["result"]["content"]
+
+
+def test_v2_direct_tool_execution_uses_dashboard_policy(tmp_path):
+    endpoint = Endpoint("test", "openai", "https://example.invalid/v1", "model", api_key="key")
+    config = Config(default_profile="test", profiles={"test": endpoint})
+    with TestClient(create_app(config=config, sessions_dir=tmp_path / "sessions")) as client:
+        created = client.post(
+            "/api/v2/executions",
+            json={
+                "capability_id": "tool.run_shell",
+                "args": {"command": "echo blocked"},
+                "mode": "background",
+            },
+        )
+        assert created.status_code == 200
+        execution_id = created.json()["id"]
+        for _ in range(50):
+            execution = client.get(f"/api/v2/executions/{execution_id}").json()
+            if execution["status"] in {"succeeded", "failed", "cancelled"}:
+                break
+            time.sleep(0.01)
+        assert execution["status"] == "failed"
+        assert "unknown tool capability 'run_shell'" in execution["error"]
 
 
 def test_v2_runs_ordered_workflow_and_emits_step_events(tmp_path):

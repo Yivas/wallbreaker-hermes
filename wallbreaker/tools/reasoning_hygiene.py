@@ -14,6 +14,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .files import _resolve_read
 from .registry import ToolContext, ToolRegistry
 
 # Keys that commonly carry provider encrypted / signed CoT state.
@@ -311,7 +312,10 @@ async def _reasoning_hygiene(args: dict, ctx: ToolContext) -> str:
     out_path = (args.get("out_path") or "").strip()
 
     if path:
-        fp = _confine(ctx, path)
+        try:
+            fp = _resolve_read(ctx, path) if ctx.confine_reads else _confine(ctx, path)
+        except PermissionError as exc:
+            return f"Error: {exc}"
         if not fp.is_file():
             return f"Error: file not found under cwd: {fp}"
         raw = fp.read_text(encoding="utf-8", errors="replace")
@@ -327,6 +331,11 @@ async def _reasoning_hygiene(args: dict, ctx: ToolContext) -> str:
     written = ""
     if strip and (out_path or path):
         dest = _confine(ctx, out_path) if out_path else _confine(ctx, path + ".scrubbed")
+        try:
+            if dest.is_symlink() or (dest.exists() and dest.stat().st_nlink != 1):
+                return f"Error: write denied for linked path: {dest}"
+        except OSError as exc:
+            return f"Error: cannot validate output path: {exc}"
         dest.write_text(cleaned, encoding="utf-8")
         written = f"\nwrote: {dest}"
 

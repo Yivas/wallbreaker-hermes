@@ -76,8 +76,11 @@ class TestSecurityMiddlewareParity:
     def _client(self, **kw):
         from fastapi.testclient import TestClient
         from wallbreaker.dashboard.server import create_app
-        return TestClient(create_app(config=None, sessions_dir="sessions", **kw),
-                          raise_server_exceptions=False)
+        return TestClient(
+            create_app(config=None, sessions_dir="sessions", **kw),
+            base_url="http://127.0.0.1:8787",
+            raise_server_exceptions=False,
+        )
 
     def test_reexported_middleware_blocks_missing_token(self):
         c = self._client(require_auth=True, auth_token="tok")

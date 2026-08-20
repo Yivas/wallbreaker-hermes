@@ -56,7 +56,7 @@ def _dummy_config(tmp_path):
 
 
 def _auth_headers(token="tok"):
-    return {"X-WB-Token": token, "Origin": "http://127.0.0.1:8787"}
+    return {"X-WB-Token": token, "Origin": "http://testserver"}
 
 
 # ===========================================================================
@@ -66,7 +66,7 @@ def _auth_headers(token="tok"):
 @settings(max_examples=200, deadline=None, suppress_health_check=_SC)
 @given(
     token=st.one_of(st.none(), st.text(alphabet=st.characters(max_codepoint=127), max_size=64), st.just("tok")),
-    origin=st.one_of(st.none(), st.just("http://127.0.0.1:8787"),
+    origin=st.one_of(st.none(), st.just("http://testserver"),
                      st.just("https://evil.example"), st.just("http://evil.example:1234")),
     method=st.sampled_from(["POST", "PUT", "DELETE"]),
 )
@@ -87,7 +87,7 @@ def test_access_control_invariant(tmp_path, token, origin, method):
     resp = c.request(method, "/api/fire",
                      json={"request": "x", "max_tokens": 8}, headers=headers)
     authenticated = token == "tok"
-    same_origin = origin in (None, "http://127.0.0.1:8787")
+    same_origin = origin in (None, "http://testserver")
     if not (authenticated and same_origin):
         assert resp.status_code in (401, 403), f"unauth/cross-site must be 401/403, got {resp.status_code}"
 

@@ -97,6 +97,7 @@ def test_agent_run_filters_optional_techniques_but_keeps_controls(monkeypatch, t
         path=tmp_path / "config.toml",
     )
     seen_tools = []
+    seen_cwds = []
 
     class FakeProvider:
         endpoint = attacker
@@ -117,7 +118,13 @@ def test_agent_run_filters_optional_techniques_but_keeps_controls(monkeypatch, t
     registry.add("finish", "stop", {"type": "object", "properties": {}}, finish)
     registry.add("optional_attack", "attack", {"type": "object", "properties": {}}, optional)
     monkeypatch.setattr(factory_mod, "build_provider", lambda _endpoint: FakeProvider())
-    monkeypatch.setattr(tools_mod, "build_registry", lambda _config: registry)
+
+    def fake_build_registry(_config, cwd="."):
+        registry.ctx.cwd = cwd
+        seen_cwds.append(cwd)
+        return registry
+
+    monkeypatch.setattr(tools_mod, "build_registry", fake_build_registry)
 
     client = TestClient(create_app(config=config, sessions_dir=tmp_path / "sessions", require_auth=False))
     with client.stream("POST", "/api/agent/run", json={
@@ -126,3 +133,5 @@ def test_agent_run_filters_optional_techniques_but_keeps_controls(monkeypatch, t
         assert response.status_code == 200
         assert '"type": "done"' in "".join(response.iter_text())
     assert seen_tools == ["finish"]
+    assert seen_cwds == [str(tmp_path / "sessions")]
+    assert registry.ctx.confine_reads is True

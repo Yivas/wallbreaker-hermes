@@ -8,6 +8,7 @@ at any time.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -21,6 +22,26 @@ REDACTED = "[REDACTED]"
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def safe_run_paths(sessions: str | Path = "sessions") -> list[Path]:
+    """Return regular, single-link run logs contained by the sessions directory."""
+    directory = Path(sessions)
+    if not directory.is_dir():
+        return []
+    base = Path(os.path.realpath(directory))
+    paths: list[Path] = []
+    for candidate in sorted(directory.glob("run-*.jsonl")):
+        try:
+            if candidate.is_symlink() or candidate.stat().st_nlink != 1:
+                continue
+            resolved = Path(os.path.realpath(candidate))
+            resolved.relative_to(base)
+        except (OSError, ValueError):
+            continue
+        if resolved.is_file():
+            paths.append(resolved)
+    return paths
 
 
 def _normalise_key(key: object) -> str:
@@ -295,21 +316,18 @@ class HistoryIndex:
             self._connection.execute("DELETE FROM runs")
             self._set_meta("source_directory", str(directory.resolve()))
             self._set_meta("last_rebuild_at", _utc_now())
-        for path in sorted(directory.glob("run-*.jsonl")):
-            if path.is_file():
-                self.index_file(path, force=True)
+        for path in safe_run_paths(directory):
+            self.index_file(path, force=True)
         return self.status()
 
     def update(self, sessions: str | Path = "sessions") -> dict[str, Any]:
         """Incrementally index new or changed canonical run files."""
         directory = Path(sessions)
+        with self._connection:
+            self._set_meta("source_directory", str(directory.resolve()))
         changed = 0
         skipped = 0
-        current_paths = {
-            str(path.resolve()): path
-            for path in sorted(directory.glob("run-*.jsonl"))
-            if path.is_file()
-        }
+        current_paths = {str(path): path for path in safe_run_paths(directory)}
         # The database is disposable and must mirror the canonical directory.
         # Prune rows for logs that were archived or deleted between updates.
         indexed_paths = {
@@ -341,6 +359,15 @@ class HistoryIndex:
     def index_file(self, path: str | Path, *, force: bool = False) -> dict[str, Any]:
         """Upsert one run file, replacing only that run when its source changed."""
         source = Path(path)
+        source_row = self._connection.execute(
+            "SELECT value FROM metadata WHERE key = 'source_directory'"
+        ).fetchone()
+        if source_row is not None:
+            allowed = {str(candidate): candidate for candidate in safe_run_paths(source_row["value"])}
+            resolved = str(Path(os.path.realpath(source)))
+            if resolved not in allowed:
+                raise ValueError("run log is outside the configured sessions directory")
+            source = allowed[resolved]
         stat = source.stat()
         run_name = source.stem
         existing = self._connection.execute(

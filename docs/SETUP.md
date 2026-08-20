@@ -14,11 +14,11 @@ explicit permission to evaluate.
 
 ## Install
 
-Clone your fork (or the upstream repository), then create an isolated Python environment:
+Clone Wallbreaker Hermes, then create an isolated Python environment:
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/wallbreaker.git
-cd wallbreaker
+git clone https://github.com/Yivas/wallbreaker-hermes.git
+cd wallbreaker-hermes
 python -m venv .venv
 ```
 
@@ -115,8 +115,9 @@ V2 separates operation from observation. **Agent** runs and steers the Attack â†
 historical run. Compose, Workflows, Arsenal, Findings, Runs and Logs, Reports, Models,
 and Settings expose the rest of the operator surface.
 
-The dashboard binds to loopback by default and has no multi-user authentication. To bind
-to another interface you must both choose the host and acknowledge the exposure:
+The dashboard binds to loopback by default. Each launch protects API routes with a local bearer
+token and same-origin checks, but it does not provide multi-user accounts or roles. To bind to
+another interface you must both choose the host and acknowledge the exposure:
 
 ```bash
 wallbreaker dashboard --host 0.0.0.0 --allow-network

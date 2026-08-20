@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+  <title id="title">Wallbreaker Hermes</title>
+  <style>
+    .bg{fill:#111827}.mark{fill:#fff}
+    @media (prefers-color-scheme:dark){.bg{fill:#f9fafb}.mark{fill:#111827}}
+  </style>
+  <rect class="bg" width="32" height="32" rx="7"/>
+  <path class="mark" d="M6 8h4l2.2 12L15 11h3l2.8 9L23 8h4l-4 16h-4l-2.5-8-2.5 8h-4z"/>
+</svg>

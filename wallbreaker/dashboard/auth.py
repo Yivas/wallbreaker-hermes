@@ -34,9 +34,6 @@ TOKEN_FILENAME = ".wallbreaker_dashboard_token"
 # learn the token). Everything else under /api/ requires auth when require_auth is True.
 EXEMPT_PATHS = frozenset({"/api/health", "/api/session"})
 
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", ""})
-
-
 def token_file_path(base: str | Path | None = None) -> Path:
     return Path(base or ".") / TOKEN_FILENAME
 
@@ -134,13 +131,16 @@ def _bearer(auth_header: str | None) -> str | None:
     return None
 
 
-def origin_is_same_site(origin: str | None) -> bool:
-    """A localhost dashboard's only legitimate Origin is a loopback host. Absent Origin means a
-    non-browser client (curl / the CLI / a test) which cannot be a CSRF victim → allowed."""
+def origin_is_same_site(origin: str | None, host_header: str | None = None) -> bool:
+    """Accept non-browser clients or an Origin matching the request Host exactly."""
     if origin is None:
         return True
-    host = urlsplit(origin).hostname or ""
-    return host.lower() in _LOOPBACK_HOSTS
+    if not host_header:
+        return False
+    parsed = urlsplit(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    return parsed.netloc.lower() == host_header.strip().lower()
 
 
 class SecurityMiddleware:
@@ -166,7 +166,7 @@ class SecurityMiddleware:
                    for k, v in scope.get("headers", [])}
 
         # CSRF: reject any cross-site Origin (and Sec-Fetch-Site: cross-site) before the handler.
-        if not origin_is_same_site(headers.get("origin")):
+        if not origin_is_same_site(headers.get("origin"), headers.get("host")):
             await self._reject(send, 403, "cross-site request blocked")
             return
         if headers.get("sec-fetch-site") in {"cross-site", "same-site"}:

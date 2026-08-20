@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Yivas/wallbreaker-hermes/security/advisories/new
+    about: Report vulnerabilities privately. Do not disclose them in a public issue.
+  - name: Documentation
+    url: https://yivas.github.io/wallbreaker-hermes/
+    about: Check the maintained guides and reference before opening an issue.

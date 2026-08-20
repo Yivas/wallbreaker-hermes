@@ -1,56 +1,82 @@
-# Security & Responsible Use
+# Security policy and responsible use
 
-Wallbreaker Hermes is an AGPL-licensed fork of Wallbreaker. It is an **offensive security
-research tool** for red-teaming and safety
-evaluation of large language models. It exists so defenders, alignment researchers,
-and model providers can find and fix weaknesses before adversaries exploit them.
+Wallbreaker Hermes is an offensive security research tool for authorized LLM red-teaming. This
+policy covers vulnerabilities in the harness and its maintained integrations. It does not grant
+permission to test third-party systems.
 
-## Authorized use only
+## Supported versions
 
-Use Wallbreaker **only** against:
+| Version | Supported |
+|-|-|
+| `0.3.x` | Yes |
+| `< 0.3` | No |
+| Unreleased `main` | Best effort; not a stable security contract |
 
-- models and endpoints you own or operate, or
-- targets you have **explicit written authorization** to test (e.g. a provider's
-  red-team program, a bug-bounty scope, an internal evaluation).
+Upgrade to the latest supported release before reporting a defect that may already be fixed.
 
-Do **not** use it to attack third-party services without permission, to generate or
-distribute genuinely harmful operational content, or in any way that violates the
-target provider's terms of service or applicable law. You are responsible for how you
-use it.
+## Report a vulnerability privately
 
-## What the tool produces
+Use GitHub's **Report a vulnerability** form for this repository:
+<https://github.com/Yivas/wallbreaker-hermes/security/advisories/new>.
 
-Wallbreaker generates adversarial prompts and records model responses for evaluation.
-Run logs, findings, and generated artifacts can contain sensitive or harmful material.
-They are written to `wb_runs/`, `wb_images/`, `wb_artifacts/`, and `findings/`, all of
-which are **gitignored** — keep them out of version control and handle them as
-sensitive data.
+Do not disclose an unpatched vulnerability in a public issue, discussion or pull request. Public
+issues are appropriate for ordinary defects only after removing exploit details and sensitive data.
 
-## Hermes runtime mode
+Include, when available:
 
-The Hermes laboratory runs only against an ephemeral, explicitly authorized target home. It
-excludes credentials, sessions, channels, logs, caches, and real gateway state; denies target
-tools and MCP; compares state before and after each repetition; and destroys the temporary home
-on every exit path. The native child process retains the host account's filesystem and network
-permissions, so the laboratory is not an operating-system sandbox.
+- affected Wallbreaker Hermes version or commit;
+- operating system, Python version and installation method;
+- affected component and security boundary;
+- minimal, sanitized reproduction steps;
+- expected and observed behavior;
+- impact, prerequisites and any known workaround.
 
-## External connections
+Remove credentials, cookies, authorization headers, private endpoints, prompts, responses, system
+instructions, account or session identifiers, operational configuration, run logs and evidence
+sidecars. If exact content matters, describe its shape with a fictional replacement.
 
-Provider, target, judge, dataset download, corpus update, and provider-verification actions use
-network connections only when the operator invokes or configures them. Session cards render
-locally unless an `[art]` endpoint is configured; that endpoint receives the target label,
-behavior labels, scores, and technique names needed to render the card. Do not configure it for
-sensitive engagements.
+Maintainers will review the report, reproduce it when possible and decide how to coordinate a fix
+and disclosure. The project does not promise a response deadline, embargo period, bounty, CVE or
+release date.
 
-## Reporting a vulnerability in Wallbreaker Hermes itself
+## Security boundaries
 
-If you find a security issue in the harness (e.g. a sandbox-escape in `run_shell`, a
-secret-leak path, an unsafe default), please open a private report rather than a public
-issue: use GitHub's **"Report a vulnerability"** (Security Advisories) on the repository,
-or contact the maintainers listed in the org. Include repro steps and impact.
+Wallbreaker Hermes runs with the permissions of the local account. Its shell, file and network
+tools are intentionally powerful. Do not treat the harness, dashboard or Hermes laboratory as a
+sandbox for untrusted code.
 
-## Handling model-provider system prompts
+The Hermes laboratory uses an ephemeral, explicitly authorized target home. It excludes
+credentials, sessions, channels, logs, caches and gateway state; denies target tools and MCP;
+compares state before and after each repetition; and removes the temporary home on exit. The child
+process still retains the host account's filesystem and network permissions.
 
-`leak_scan` and related tools may surface a target's hidden system prompt. Treat any
-extracted prompt as the provider's confidential material — report it through their
-responsible-disclosure channel; do not publish it.
+The dashboard binds to `127.0.0.1` by default. Keep it local unless you provide an appropriate
+external authentication, TLS and network-control layer. Local authentication controls reduce
+accidental access but do not make an internet-facing deployment safe by themselves.
+
+## Sensitive outputs
+
+Adversarial prompts, model responses, findings and generated files may contain harmful or
+confidential material. Default output locations are ignored by Git, but that does not encrypt,
+redact or erase them.
+
+Hermes campaign reports are sanitized. Human-review bodies live in a separate local sidecar with
+restrictive permissions and an integrity binding to the report. `review` and `verify` do not send
+those bodies to Hermes Agent. Operators remain responsible for backups, filesystem access and
+secure deletion.
+
+## Network behavior
+
+Network access occurs only through configured or explicitly invoked operations, including provider,
+target and judge calls, dataset or corpus updates and provider verification. An optional `[art]`
+endpoint receives labels, scores and technique names required to render a session card; do not
+configure it for sensitive engagements.
+
+The default test and documentation workflows must not run live campaigns or require provider
+credentials.
+
+## Responsible use
+
+Use the project only against systems you own, operate or have explicit written authorization to
+test. Follow the provider's terms and applicable law. Report target-provider weaknesses through the
+provider's disclosure channel, especially when a test surfaces confidential system instructions.
