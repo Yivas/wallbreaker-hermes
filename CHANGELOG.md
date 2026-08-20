@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-20
+
+### Added
+
+- Added a permission-restricted private evidence sidecar for human review while keeping campaign
+  report v2 sanitized and structurally verifiable without private bodies.
+- Added local `--show-evidence` and `--delete-evidence` review controls. Hermes Agent can coordinate
+  pending IDs and decisions but cannot open or reproduce the private evidence.
+
+### Fixed
+
+- Required HMAC-bound objective, prompt, and response evidence before resolving manual reviews or
+  resuming campaign fires.
+- Hardened report, sidecar, and lock handling against aliases, links, reparse points, oversized
+  evidence, malformed JSON, interrupted writes, concurrent deletion, and retry accumulation.
+- Escaped terminal control sequences in local evidence display and stopped Hermes campaign commands
+  from loading dotenv files implicitly.
+- Corrected the optional offline prompt-corpus documentation; Wallbreaker neither ships nor fetches
+  that corpus.
+- Added explicit property-based tests and clean wheel installation to the release workflow.
+
+### Compatibility
+
+- Existing report v2 files remain structurally verifiable. Reports created before private sidecars
+  that already contain fires cannot be resumed or manually resolved because their review bodies no
+  longer exist.
+- The Hermes Agent baseline remains `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
+
 ## 0.2.2 - 2026-08-16
 
 This is the first published `wallbreaker-hermes` distribution. The `v0.2.0` and `v0.2.1`
