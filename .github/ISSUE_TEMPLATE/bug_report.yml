@@ -11,7 +11,7 @@ body:
     attributes:
       label: Version or commit
       description: Run `wallbreaker --version` or provide the commit SHA.
-      placeholder: wallbreaker-hermes 0.3.0
+      placeholder: wallbreaker-hermes 0.3.1
     validations:
       required: true
   - type: input

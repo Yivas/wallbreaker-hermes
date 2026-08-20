@@ -8,7 +8,7 @@ sidebar:
 Install the optional dashboard dependencies and start the local service:
 
 ```bash
-python -m pip install "wallbreaker-hermes[dashboard]==0.3.0"
+python -m pip install "wallbreaker-hermes[dashboard]==0.3.1"
 wallbreaker dashboard
 ```
 

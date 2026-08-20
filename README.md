@@ -16,7 +16,7 @@ ephemeral Hermes Agent target.
 
 ## Scope and status
 
-- **Current release:** `v0.3.0` / `wallbreaker-hermes==0.3.0`.
+- **Current release:** `v0.3.1` / `wallbreaker-hermes==0.3.1`.
 - **Python:** 3.11 or newer.
 - **Project mode:** open source collaborative. In-scope issues and pull requests are welcome.
 - **Hermes baseline:** Hermes Agent `v2026.8.13`, package `0.20.1`, commit
@@ -35,7 +35,7 @@ network permissions of the account that runs it.
 Install the published package:
 
 ```bash
-python -m pip install wallbreaker-hermes==0.3.0
+python -m pip install wallbreaker-hermes==0.3.1
 wallbreaker --help
 ```
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-08-20
+
 ### Changed
 
 - Replaced the repository entry point with a concise supported-release guide and moved maintained
@@ -11,15 +13,27 @@
 
 ### Fixed
 
-- Confined dashboard report selection to existing logs under the configured sessions directory.
-- Applied the dashboard read-confinement policy to `cluster_findings` log and directory inputs.
-- Restricted dashboard run identifiers to portable filename characters before filesystem access.
+- Confined dashboard reports, history, capability discovery, direct tool execution and autonomous
+  agent reads to approved run logs and working directories.
+- Rejected symlinks, hardlinks, traversal, non-run files and nested linked logs before dashboard
+  history or evidence processing.
+- Required exact Origin and Host agreement before returning the local dashboard launch token.
+- Applied read and write confinement to `cluster_findings` and reasoning-hygiene paths.
+- Increased the headless Chrome render timeout for slower CI runners.
 
 ### Security
 
 - Removed agent rules, operational audits, specs and internal work notes from the active public tree.
 - Added explicit read-only permissions to the red-team gate workflow and documented the disposition
-  of CodeQL false positives separately from the confirmed dashboard path issue.
+  of CodeQL false positives separately from confirmed dashboard path issues.
+
+### Upgrade
+
+```text
+pip install --upgrade wallbreaker-hermes==0.3.1
+```
+
+Compare: `https://github.com/Yivas/wallbreaker-hermes/compare/v0.3.0...v0.3.1`.
 
 ## 0.3.0 - 2026-08-20
 
