@@ -13,9 +13,17 @@
 - Stabilized the autocomplete regression test by delivering keyboard events before checking the
   popup. This does not change TUI behavior.
 
+### Security
+
+- Updated the documentation build to Astro 7.2.8, Sharp 0.35.4, SVGO 4.1.0 and js-yaml 4.3.2
+  to address the reported image-processing, SVG sanitization and YAML resource-exhaustion issues.
+- Updated development-only Vitest and its mocker to 4.1.11 to address redirect-mock file disclosure.
+  These packages belong to documentation builds or frontend tests, not Python runtime dependencies.
+- Explicitly disabled Astro telemetry in the documentation CI build.
+
 ### Compatibility
 
-- The campaign engine, public APIs, dependency requirements and locked dependency versions are unchanged.
+- The campaign engine, public APIs and Python dependency requirements are unchanged.
 - The Hermes target remains fixed to `v2026.8.13`, package `0.20.1`, commit
   `f80f453ae0679347e38abc917c7f94f717bf96c5`. Coordinator support depends on the required native
   capabilities, not on matching that target version.
