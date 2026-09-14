@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 - 2026-09-14
 
 ### Fixed
 
@@ -10,6 +10,27 @@
 - Clarified coordinator requirements across the operator integration and laboratory guides, with
   regression tests separating them from the exact target baseline. The skill remains installed
   separately from GitHub; the Python wheel does not contain it.
+- Stabilized the autocomplete regression test by delivering keyboard events before checking the
+  popup. This does not change TUI behavior.
+
+### Compatibility
+
+- The campaign engine, public APIs, dependency requirements and locked dependency versions are unchanged.
+- The Hermes target remains fixed to `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`. Coordinator support depends on the required native
+  capabilities, not on matching that target version.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.3.2
+```
+
+Refresh the [Hermes operator skill](https://github.com/Yivas/wallbreaker-hermes/blob/v0.3.2/integrations/hermes/README.md)
+separately and start a new coordinator conversation so previously loaded instructions are not reused.
+Generate and approve a fresh dry-run plan before any campaign after upgrading.
+
+Compare: [v0.3.1...v0.3.2](https://github.com/Yivas/wallbreaker-hermes/compare/v0.3.1...v0.3.2).
 
 ## 0.3.1 - 2026-08-20
 
