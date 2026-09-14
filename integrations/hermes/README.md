@@ -7,13 +7,26 @@ not modify Hermes core or the clean checkout used by `hermes-lab`.
 
 ## Compatibility
 
+Use your usual Hermes Agent as the coordinator. It needs skill discovery/loading, native
+`clarify` for decisions, the normal `terminal` tool, and an installed Wallbreaker CLI.
+The coordinator is not pinned to the target release; a second bot or conversation account is
+not required. If a capability is missing, stop rather than bypassing authorization. These
+requirements do not promise compatibility with every Hermes revision or provider.
+
+Only the **separate target checkout** is fixed to:
+
 - Hermes Agent release: `v2026.8.13`
 - Python package: `0.20.1`
 - Git commit: `f80f453ae0679347e38abc917c7f94f717bf96c5`
+
+Other target revisions remain unsupported. Do not downgrade the coordinator or point the target
+at its checkout or home. Campaign models, provider credentials and costs are separate from the
+chat model; do not copy the coordinator's credentials or assume consent to provider charges.
+
+The workflow continues to use:
+
 - Wallbreaker report: `wallbreaker.hermes-campaign-report/v2`
 - Wallbreaker CLI events: `wallbreaker.hermes-cli-event/v1`
-
-Other Hermes Agent revisions are not supported by this integration.
 
 ## Install
 
@@ -39,6 +52,10 @@ hermes skills inspect wallbreaker-hermes
 
 Do not install the skill into the dedicated checkout configured as `hermes_runtime`. That checkout
 must remain clean at the fixed commit.
+
+If a conversation has already loaded an older skill, start a new conversation with `/new` before
+requesting the updated workflow. Editing the skill does not replace instructions in chat history.
+A skill update alone does not require another Hermes installation or a gateway restart.
 
 ## Fictional fixtures
 

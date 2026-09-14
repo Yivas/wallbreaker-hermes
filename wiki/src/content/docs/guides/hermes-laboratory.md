@@ -14,6 +14,10 @@ ephemeral copy of an approved home. It is validated against:
 | Package version | `0.20.1` |
 | Commit | `f80f453ae0679347e38abc917c7f94f717bf96c5` |
 
+This baseline applies only to the target. Your usual Hermes Agent can coordinate Wallbreaker
+with native skill loading, `clarify` and `terminal`; it does not need the target's pinned release
+or a second conversation account. Never use the coordinator's checkout or home as the target.
+
 ## What the laboratory enforces
 
 - A dedicated checkout and interpreter.

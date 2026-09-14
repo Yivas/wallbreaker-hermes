@@ -6,7 +6,7 @@ imports, or `wallbreaker`/`wb` commands.
 ## Verified baselines
 
 - Wallbreaker upstream: `8b85e768efa69028b4af9f3d1c9c079178aa8a53`
-- Hermes Agent: tag `v2026.8.13`, package `0.20.1`, commit
+- Hermes Agent target: tag `v2026.8.13`, package `0.20.1`, commit
   `f80f453ae0679347e38abc917c7f94f717bf96c5`
 
 The Hermes adapter rejects a checkout or package version that does not match its closed

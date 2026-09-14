@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- Let the user's usual Hermes Agent coordinate Wallbreaker through native skill loading,
+  clarification and terminal tools instead of requiring the target's pinned release on the
+  coordinator. The separate target baseline, campaign authorization and evidence gates are unchanged.
+- Clarified coordinator requirements across the operator integration and laboratory guides, with
+  regression tests separating them from the exact target baseline. The skill remains installed
+  separately from GitHub; the Python wheel does not contain it.
+
 ## 0.3.1 - 2026-08-20
 
 ### Changed

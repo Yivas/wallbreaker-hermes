@@ -13,13 +13,27 @@ metadata:
 
 # Wallbreaker Hermes
 
-Operate Wallbreaker Hermes campaigns against a fixed, ephemeral Hermes Agent laboratory target.
+Use your usual Hermes Agent to coordinate Wallbreaker Hermes campaigns against a separate,
+fixed, ephemeral Hermes Agent laboratory target.
 The laboratory is not an operating-system sandbox.
 
 ## When to use
 
 Load this skill when an operator asks to plan, run, resume, review, or verify a Wallbreaker Hermes
 campaign. Use it only for systems the operator is authorized to test.
+
+## Coordinator requirements
+
+The coordinator is not pinned to the target release. Use your existing Hermes installation;
+do not set up a second bot or conversation account just to coordinate Wallbreaker.
+
+It must be able to discover and load this skill, obtain decisions through native `clarify`,
+and invoke the installed `wallbreaker` CLI through the normal `terminal` tool.
+If a required capability is missing, stop and report it. Do not bypass clarification or
+replace it with a command that assumes authorization.
+
+The chat model does not select campaign attacker or target providers or authorize their costs.
+Obtain those decisions separately; do not copy the coordinator's credentials into a campaign.
 
 ## Required checks
 
@@ -37,9 +51,10 @@ Stop if authorization is absent or denied.
 
 ## Procedure
 
-1. Check that `wallbreaker` is installed and that the operator-side Hermes Agent release is
-   `v2026.8.13`. Wallbreaker validates package `0.20.1` and commit
-   `f80f453ae0679347e38abc917c7f94f717bf96c5` for the separate target checkout.
+1. Check the coordinator requirements above. The separate target checkout remains pinned to
+   release `v2026.8.13`, package `0.20.1`, and commit
+   `f80f453ae0679347e38abc917c7f94f717bf96c5`. Wallbreaker validates that target, not the
+   coordinator's release. Never use the coordinator's checkout or home as the target.
 2. Use the normal shell or terminal tool to run the dry run. Never use `execute_code` for these
    commands.
 

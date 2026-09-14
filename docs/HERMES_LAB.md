@@ -10,7 +10,7 @@ and network permissions of the account that launches Wallbreaker.
 
 ## Fixed Baseline
 
-The first adapter supports this Hermes Agent revision only:
+The adapter supports this **target** revision only; it does not pin the coordinator:
 
 - Release: `v2026.8.13`
 - Package: `0.20.1`
@@ -274,9 +274,17 @@ Agent, not the clean checkout used as the target:
 hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes
 ```
 
-The skill is fixed to Hermes Agent release `v2026.8.13`, package `0.20.1`, and commit
-`f80f453ae0679347e38abc917c7f94f717bf96c5`. It uses `clarify` for authorization, limits, and
-confirmation, then invokes the CLI through a normal shell tool. It may list pending review IDs, but
+Use your usual Hermes Agent as the coordinator, with skill discovery/loading, native `clarify`
+for authorization, limits and confirmation, and the normal `terminal` tool to invoke the installed
+Wallbreaker CLI. No second bot or conversation account is required. Stop if one of those
+capabilities is unavailable; do not replace clarification with implicit authorization.
+
+Only the target is fixed to release `v2026.8.13`, package `0.20.1`, and commit
+`f80f453ae0679347e38abc917c7f94f717bf96c5`. The coordinator's version and chat model do not
+select campaign providers or authorize their costs. Do not copy its credentials into a campaign.
+The capability contract does not assert that every Hermes revision or provider has been tested.
+
+The skill may list pending review IDs, but
 it never invokes `--show-evidence` or receives review bodies. The human reviews them in a separate
 local terminal and supplies the resulting decisions. The skill does not modify Hermes core,
 inspect configuration contents, or use `execute_code` for campaign commands.

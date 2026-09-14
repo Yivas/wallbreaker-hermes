@@ -33,7 +33,12 @@ def test_skill_is_discoverable_and_enforces_operator_gates():
     assert len(metadata["description"]) <= 60
     assert metadata["platforms"] == ["linux", "macos", "windows"]
     for required in (
-        "clarify",
+        "Before any live command, use `clarify`",
+        "Confirmation that strict cleanup and review evidence are required.",
+        "plan.validated",
+        "If any input changes,",
+        "Never invoke `--show-evidence`",
+        "Do not declare success unless verification exits `0`.",
         "--dry-run",
         "--authorized --confirm TOKEN",
         "wallbreaker hermes review",
@@ -45,6 +50,43 @@ def test_skill_is_discoverable_and_enforces_operator_gates():
         assert required in text
     assert "Never use `execute_code`" in text
     assert "install this skill into the clean Hermes checkout" in text
+
+
+def test_skill_requires_coordinator_capabilities_not_a_release():
+    text = SKILL.read_text(encoding="utf-8")
+    requirements = text.split("## Coordinator requirements\n", 1)[1].split(
+        "## Required checks\n", 1
+    )[0]
+
+    assert "not pinned to the target release" in requirements
+    assert "discover and load this skill" in requirements
+    assert "native `clarify`" in requirements
+    assert "normal `terminal` tool" in requirements
+    assert "installed `wallbreaker` CLI" in requirements
+    assert "If a required capability is missing, stop" in requirements
+    assert "do not set up a second bot or conversation account" in requirements
+    assert "do not copy the coordinator's credentials" in requirements
+    assert HERMES_BASELINE_RELEASE not in requirements
+    assert HERMES_BASELINE_VERSION not in requirements
+    assert HERMES_BASELINE_SHA not in requirements
+    assert "operator-side Hermes Agent release is" not in text
+
+
+def test_skill_keeps_the_exact_target_baseline():
+    text = SKILL.read_text(encoding="utf-8")
+    target_check = text.split("## Procedure\n", 1)[1].split("2. Use", 1)[0]
+
+    assert HERMES_BASELINE_RELEASE == "v2026.8.13"
+    assert HERMES_BASELINE_VERSION == "0.20.1"
+    assert HERMES_BASELINE_SHA == "f80f453ae0679347e38abc917c7f94f717bf96c5"
+    assert "separate target checkout remains pinned" in target_check
+    for baseline in (
+        HERMES_BASELINE_RELEASE,
+        HERMES_BASELINE_VERSION,
+        HERMES_BASELINE_SHA,
+    ):
+        assert baseline in target_check
+    assert "Never use the coordinator's checkout or home as the target" in target_check
 
 
 def test_fictional_examples_match_closed_schemas():
@@ -71,6 +113,9 @@ def test_public_integration_contains_no_private_runtime_material():
     )
     for blocked in (
         "D:\\Hermes",
+        "D:/Hermes",
+        "operator-home",
+        "Local installation adaptation",
         "HERMES_HOME=",
         "api_key =",
         "sk-",

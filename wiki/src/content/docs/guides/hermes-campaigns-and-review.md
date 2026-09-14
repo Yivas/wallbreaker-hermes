@@ -10,12 +10,23 @@ The flow reuses Wallbreaker's attack loop and judge instead of creating a separa
 
 ## Operator flow
 
-1. Prepare a fictional or authorized suite.
-2. Run the dry run and inspect the resolved target, limits and manifest.
-3. Confirm authorization and resource limits.
-4. Execute the campaign.
-5. Review findings that lack enough automated evidence.
-6. Verify the sanitized report and its integrity binding.
+Ask your usual Hermes Agent to coordinate this flow through the
+[operator skill](https://github.com/Yivas/wallbreaker-hermes/tree/main/integrations/hermes).
+It needs skill discovery/loading, native `clarify`, the normal `terminal` tool and the installed
+Wallbreaker CLI. Stop if a capability is missing; a second bot or conversation account is not
+required. The fixed Hermes release belongs to the target, not the coordinator.
+
+1. Confirm authorization for the target and suite, exact resource limits, strict cleanup and review.
+2. Prepare a fictional or authorized suite and separate campaign configuration. Campaign providers
+   and costs are separate decisions from the chat model; do not copy the coordinator's credentials.
+3. Run the dry run and inspect the resolved target, limits and manifest.
+4. Approve that exact plan's confirmation token. Changed inputs require another dry run.
+5. Execute the approved campaign.
+6. Review findings that lack enough automated evidence.
+7. Verify the sanitized report and its integrity binding; success requires exit code `0`.
+
+If the conversation already loaded an older skill, use `/new` before requesting this workflow.
+Offline checks of skill loading and tool contracts are not a live campaign or provider test.
 
 Use the CLI help for the exact arguments supported by the installed release:
 

@@ -19,13 +19,17 @@ ephemeral Hermes Agent target.
 - **Current release:** `v0.3.1` / `wallbreaker-hermes==0.3.1`.
 - **Python:** 3.11 or newer.
 - **Project mode:** open source collaborative. In-scope issues and pull requests are welcome.
-- **Hermes baseline:** Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+- **Hermes target baseline:** Hermes Agent `v2026.8.13`, package `0.20.1`, commit
   `f80f453ae0679347e38abc917c7f94f717bf96c5`.
 
 The standard CLI, TUI, dashboard, provider layer, attack tools, judge, reports and reliability
 checks remain available. The Hermes laboratory supports one text turn against a clean home or a
 selected, sanitized context. It rejects target tools, MCP, custom prompt layers, profiles, prefill,
 continuation and multimodal input.
+
+Your usual Hermes Agent can coordinate the CLI through the [operator skill](integrations/hermes/README.md).
+It needs native skill loading, `clarify` and `terminal`; the fixed release above applies only to
+the separate target, not the coordinator. You do not need a second bot or conversation account.
 
 The laboratory is **not an operating-system sandbox**. Its child process retains the filesystem and
 network permissions of the account that runs it.
