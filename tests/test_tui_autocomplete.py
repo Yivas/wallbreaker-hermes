@@ -48,9 +48,11 @@ def test_autocomplete_popup_opens_and_filters():
             assert not menu.has_class("hidden")
             assert app._cmd_menu_items == ["/session"]
 
-            # typing a space (command complete) closes the popup
-            inp.value = "/session "
+            # Deliver input events through the pilot before checking the popup.
+            inp.cursor_position = len(inp.value)
+            await pilot.press("i", "o", "n", "space")
             await pilot.pause()
+            assert inp.value == "/session "
             assert app._cmd_menu_open is False
             assert menu.has_class("hidden")
 
