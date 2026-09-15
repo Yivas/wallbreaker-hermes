@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-09-15
 
 ### Added
 
@@ -16,6 +16,25 @@
 
 - Normalised carriage returns in the private review display so Windows bodies no longer render
   `\x0d` escapes before every line.
+
+### Compatibility
+
+- No changes to the campaign engine, judge implementation, report schemas or dependencies.
+- The separate target remains fixed to Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
+- The interactive review is a local terminal control. The coordinating agent still receives no
+  private bodies and must not run it, `--show-evidence` or the sidecar.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.5.0
+```
+
+Refresh the operator skill from the same public source and start a new coordinator conversation
+before relying on the new control.
+
+Compare: [v0.4.0...v0.5.0](https://github.com/Yivas/wallbreaker-hermes/compare/v0.4.0...v0.5.0).
 
 ## 0.4.0 - 2026-09-15
 
