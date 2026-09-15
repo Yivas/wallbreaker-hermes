@@ -264,14 +264,16 @@ missing, and `130` for operator cancellation. Argparse returns `2` for command s
 an operator action starts. Cancellation checkpoints the report; resumption creates a new attempt
 and replica.
 
-## Hermes Agent operator skill
+## Hermes Agent campaign skills
 
-The public skill source is
-`integrations/hermes/skills/wallbreaker-hermes/SKILL.md`. Install it into the operator-side Hermes
-Agent, not the clean checkout used as the target:
+The public operator skill is `integrations/hermes/skills/wallbreaker-hermes/SKILL.md`.
+Its companion, `integrations/hermes/skills/wallbreaker-campaign-setup/SKILL.md`, supplies fictional
+artifact templates and offline diagnosis. Install both into the operator-side Hermes Agent,
+not the clean checkout used as the target:
 
 ```text
 hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes
+hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-campaign-setup
 ```
 
 Use your usual Hermes Agent as the coordinator, with skill discovery/loading, native `clarify`
@@ -288,4 +290,12 @@ The skill may list pending review IDs, but
 it never invokes `--show-evidence` or receives review bodies. The human reviews them in a separate
 local terminal and supplies the resulting decisions. The skill does not modify Hermes core,
 inspect configuration contents, or use `execute_code` for campaign commands.
-Fictional fixtures are under `integrations/hermes/examples/`.
+The setup companion may create explicitly requested fictional artifacts, not read existing
+operational configuration or private bodies. Fictional fixtures are under
+`integrations/hermes/examples/`; the setup skill also bundles installable templates and references.
+Both skills are source-distributed, not wheel contents; local copies should remain identical.
+
+The stock text judge evaluates harmful usefulness, not general instruction following. Its labels
+and the lexical heuristic must not be treated as a calibrated behavior oracle. Check suitability
+before paid work; do not change expectations or review decisions merely to make verification pass.
+HMAC evidence binding is not encryption, and structural verification does not certify judge accuracy.

@@ -13,6 +13,14 @@ DISTRIBUTION = "wallbreaker-hermes"
 VERSION = "0.3.2"
 WHEEL_PREFIX = f"wallbreaker_hermes-{VERSION}-"
 SDIST_NAME = f"wallbreaker_hermes-{VERSION}.tar.gz"
+HERMES_SKILLS = ("wallbreaker-hermes", "wallbreaker-campaign-setup")
+SETUP_FILES = (
+    "references/preparing-campaign-artifacts.md",
+    "references/diagnosing-harness-failures.md",
+    "templates/lab-suite.yaml",
+    "templates/lab-config.toml",
+    "templates/lab-manifest.json",
+)
 REQUIRED_WHEEL = {
     "wallbreaker/__init__.py",
     "wallbreaker/tui/app.tcss",
@@ -69,6 +77,8 @@ def check_wheel(path: Path) -> None:
         missing = REQUIRED_WHEEL - set(names)
         if missing:
             fail(f"wheel is missing: {', '.join(sorted(missing))}")
+        if any(name.startswith("integrations/hermes/") for name in names):
+            fail("Hermes skills must remain source-distributed, not wheel contents")
         if any(name.startswith("wallbreaker_hermes/") for name in names):
             fail("wheel must preserve the wallbreaker import package")
         if any(
@@ -108,13 +118,20 @@ def check_sdist(path: Path) -> None:
             root + "NOTICE",
             root + "config.example.toml",
             root + "library.lock.toml",
-            root + "integrations/hermes/skills/wallbreaker-hermes/SKILL.md",
             root + "wallbreaker/dashboard/web/dist/index.html",
             root + "wallbreaker/dashboard/web/package.json",
             root + "wallbreaker/dashboard/web/package-lock.json",
             root + "wallbreaker/dashboard/web/bun.lock",
             root + "wallbreaker/tui/app.tcss",
         }
+        required.update(
+            root + f"integrations/hermes/skills/{name}/SKILL.md"
+            for name in HERMES_SKILLS
+        )
+        required.update(
+            root + "integrations/hermes/skills/wallbreaker-campaign-setup/" + name
+            for name in SETUP_FILES
+        )
         missing = required - set(names)
         if missing:
             fail(f"sdist is missing: {', '.join(sorted(missing))}")
@@ -125,14 +142,17 @@ def check_source_versions(root: Path) -> None:
     package = json.loads(
         (root / "wallbreaker/dashboard/web/package.json").read_text(encoding="utf-8")
     )
-    skill = (root / "integrations/hermes/skills/wallbreaker-hermes/SKILL.md").read_text(
-        encoding="utf-8"
-    )
     init = (root / "wallbreaker/__init__.py").read_text(encoding="utf-8")
     if package["version"] != VERSION:
         fail("dashboard version is out of sync")
-    if f"version: {VERSION}" not in skill or f'__version__ = "{VERSION}"' not in init:
-        fail("Python or skill version is out of sync")
+    if f'__version__ = "{VERSION}"' not in init:
+        fail("Python version is out of sync")
+    for name in HERMES_SKILLS:
+        skill = (root / f"integrations/hermes/skills/{name}/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        if f"version: {VERSION}" not in skill:
+            fail(f"{name} skill version is out of sync")
 
 
 def main() -> None:

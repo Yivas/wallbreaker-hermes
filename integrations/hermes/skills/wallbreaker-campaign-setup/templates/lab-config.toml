@@ -1,0 +1,18 @@
+# Fictional skeleton: replace placeholders with approved non-secret choices.
+# The target credential variable must be understood by its Hermes provider.
+default_profile = "attacker"
+
+[profiles.attacker]
+protocol = "openai"
+base_url = "https://api.example.invalid/v1"
+model = "fixture/attacker"
+api_key_env = "FIXTURE_PROVIDER_KEY"
+
+[target]
+protocol = "hermes-lab"
+model = "fixture/model"
+api_key_env = "FIXTURE_PROVIDER_KEY"
+hermes_provider = "fixture-provider"
+hermes_runtime = "/absolute/path/to/hermes-target"
+hermes_python = "/absolute/path/to/hermes-target/.venv/bin/python"
+hermes_manifest = "/absolute/path/to/lab-manifest.json"

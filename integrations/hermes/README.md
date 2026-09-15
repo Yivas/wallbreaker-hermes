@@ -1,4 +1,4 @@
-# Hermes Agent operator skill
+# Hermes Agent campaign skills
 
 This source-distributed integration lets an operator-side Hermes Agent discover and run the
 Wallbreaker Hermes CLI. It is installed directly from the public GitHub repository and is not part
@@ -37,10 +37,11 @@ pip install wallbreaker-hermes
 ```
 
 The import package remains `wallbreaker`, and the commands remain `wallbreaker` and `wb`. Install
-the operator skill separately from its public GitHub path:
+the two companion skills separately from their public GitHub paths:
 
 ```text
 hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes
+hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-campaign-setup
 ```
 
 Confirm discovery:
@@ -48,6 +49,7 @@ Confirm discovery:
 ```text
 hermes skills list
 hermes skills inspect wallbreaker-hermes
+hermes skills inspect wallbreaker-campaign-setup
 ```
 
 Do not install the skill into the dedicated checkout configured as `hermes_runtime`. That checkout
@@ -56,6 +58,22 @@ must remain clean at the fixed commit.
 If a conversation has already loaded an older skill, start a new conversation with `/new` before
 requesting the updated workflow. Editing the skill does not replace instructions in chat history.
 A skill update alone does not require another Hermes installation or a gateway restart.
+
+## Responsibilities and updates
+
+- `wallbreaker-hermes`: authorization, exact-plan execution, private review and verification.
+- `wallbreaker-campaign-setup`: fictional artifact templates, evaluator suitability and offline
+  diagnosis. Its references and templates are included in the skill directory.
+
+Both are distributed through GitHub and the source archive, not the Python wheel. Keep installed
+files identical to the public source; preserve filesystem protections during authorized updates.
+Updating the skills does not update Wallbreaker or authorize package patches, live probes, or costs.
+Check installed CLI compatibility before use. Historical release archives do not acquire files
+added later on the source branch.
+
+The stock text judge measures harmful usefulness, not general instruction following. A parseable
+judgment or agreement with a heuristic does not calibrate it. Establish measurement suitability
+before proposing paid work, and keep behavior, state, tool attempts and execution failures separate.
 
 ## Fictional fixtures
 
@@ -69,8 +87,8 @@ or provider endpoints.
 
 An authorized campaign writes the sanitized `RUN` report and `RUN.evidence.json`. The sidecar is
 local, gitignored, permission-restricted, and bound to the report with
-`WALLBREAKER_HERMES_EVIDENCE_KEY`. Hermes Agent may list pending IDs but must not open or reproduce
-that file.
+`WALLBREAKER_HERMES_EVIDENCE_KEY`. HMAC binds evidence but does not encrypt it. Hermes Agent may
+list pending IDs but must not open or reproduce that file.
 
 The operator reviews bodies in a separate interactive terminal:
 
@@ -90,4 +108,5 @@ Use Hermes Agent's normal skill removal command:
 
 ```text
 hermes skills uninstall wallbreaker-hermes
+hermes skills uninstall wallbreaker-campaign-setup
 ```

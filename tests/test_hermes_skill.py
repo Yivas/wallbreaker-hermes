@@ -1,8 +1,13 @@
 import json
 import re
+import tarfile
+import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
+
+from scripts.check_release_artifacts import SETUP_FILES, VERSION, check_sdist
 
 from wallbreaker.hermes_campaign import load_suite
 from wallbreaker.hermes_lab import (
@@ -16,6 +21,7 @@ from wallbreaker.hermes_lab import (
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "integrations" / "hermes"
 SKILL = INTEGRATION / "skills" / "wallbreaker-hermes" / "SKILL.md"
+SETUP = INTEGRATION / "skills" / "wallbreaker-campaign-setup"
 
 
 def _frontmatter(text):
@@ -87,6 +93,88 @@ def test_skill_keeps_the_exact_target_baseline():
     ):
         assert baseline in target_check
     assert "Never use the coordinator's checkout or home as the target" in target_check
+
+
+@pytest.mark.parametrize("name", ["wallbreaker-hermes", "wallbreaker-campaign-setup"])
+def test_companion_skills_have_public_metadata(name):
+    text = (INTEGRATION / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+    metadata = _frontmatter(text)
+    assert metadata["name"] == name
+    assert metadata["description"].endswith(".")
+    assert len(metadata["description"]) <= 60
+    assert metadata["version"] == VERSION
+    assert metadata["license"] == "AGPL-3.0-or-later"
+    assert metadata["platforms"] == ["linux", "macos", "windows"]
+    assert metadata["metadata"]["hermes"]["related_skills"] == [
+        "wallbreaker-campaign-setup" if name == "wallbreaker-hermes" else "wallbreaker-hermes"
+    ]
+
+
+def test_setup_references_are_bundled_and_self_contained():
+    assert {path.relative_to(SETUP).as_posix() for path in SETUP.rglob("*") if path.is_file()} == {
+        "SKILL.md", *SETUP_FILES
+    }
+    text = (SETUP / "SKILL.md").read_text(encoding="utf-8")
+    links = re.findall(r"\]\(([^)]+)\)", text)
+    assert set(links) == set(SETUP_FILES)
+    for link in links:
+        target = (SETUP / link).resolve()
+        assert target.is_relative_to(SETUP.resolve())
+        assert target.is_file()
+
+
+def test_skills_keep_measurement_and_authorization_boundaries():
+    operator = " ".join(SKILL.read_text(encoding="utf-8").split())
+    setup = " ".join((SETUP / "SKILL.md").read_text(encoding="utf-8").split())
+    diagnosis = " ".join(
+        (SETUP / "references/diagnosing-harness-failures.md").read_text(encoding="utf-8").split()
+    )
+    for required in (
+        "Reuse decisions already supplied", "once per unchanged plan",
+        "Do not relabel expectations", "HMAC binds private evidence; it does not encrypt",
+        "not absence of security findings or judge accuracy",
+    ):
+        assert required in operator
+    for required in (
+        "before proposing models, paid probes, or a benchmark",
+        "offline structural verification does not require that key",
+        "does not test model availability", "files byte-identical",
+    ):
+        assert required in setup
+    for required in (
+        "Parser acceptance is not strict schema validation or semantic accuracy",
+        "Evidence awaiting review is not evidence known to be absent",
+        "Preserve reports, evidence, and locks",
+    ):
+        assert required in diagnosis
+
+
+def test_setup_templates_reuse_public_fictional_contracts():
+    suite_path = SETUP / "templates/lab-suite.yaml"
+    suite = load_suite(suite_path)
+    assert len(suite.cases) == 3
+    assert suite_path.read_text(encoding="utf-8") == (
+        INTEGRATION / "examples/synthetic-suite.yaml"
+    ).read_text(encoding="utf-8")
+    manifest = json.loads((SETUP / "templates/lab-manifest.json").read_text(encoding="utf-8"))
+    assert manifest == json.loads((INTEGRATION / "examples/clean-manifest.json").read_text(encoding="utf-8"))
+    config = tomllib.loads((SETUP / "templates/lab-config.toml").read_text(encoding="utf-8"))
+    assert config["target"]["protocol"] == "hermes-lab"
+    assert config["target"]["model"] == manifest["model"]
+    assert config["target"]["hermes_provider"] == manifest["provider"]
+    assert manifest["expected_tool_count"] == 0
+    assert config["profiles"][config["default_profile"]]["base_url"] == "https://api.example.invalid/v1"
+    assert "api_key" not in config["target"]
+
+
+def test_sdist_requires_setup_and_all_companions(tmp_path):
+    archive = tmp_path / "empty.tar.gz"
+    with tarfile.open(archive, "w:gz"):
+        pass
+    with pytest.raises(SystemExit) as error:
+        check_sdist(archive)
+    for name in ("SKILL.md", *SETUP_FILES):
+        assert f"integrations/hermes/skills/wallbreaker-campaign-setup/{name}" in str(error.value)
 
 
 def test_fictional_examples_match_closed_schemas():
