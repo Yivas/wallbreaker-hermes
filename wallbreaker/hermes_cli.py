@@ -6,6 +6,8 @@ import hmac
 import json
 import sys
 
+from pathlib import Path
+
 from . import __version__
 from .config import ConfigError, load_config
 from .hermes_campaign import (
@@ -280,6 +282,16 @@ def _display_private_reviews(entries: tuple[dict, ...]) -> None:
         print(f"\nResponse:\n{safe_terminal_text(entry['response'])}", file=sys.stderr)
 
 
+def operator_commands(run: str | Path) -> dict:
+    """Ready-to-run local commands with an absolute path, for any working directory."""
+
+    resolved = Path(run).resolve()
+    return {
+        "interactive_command": f'wallbreaker hermes review "{resolved}" --interactive',
+        "show_evidence_command": f'wallbreaker hermes review "{resolved}" --show-evidence',
+    }
+
+
 def _review_command(args: argparse.Namespace, writer: EventWriter) -> int:
     if args.interactive:
         if args.decisions or args.show_evidence or args.delete_evidence:
@@ -332,6 +344,7 @@ def _review_command(args: argparse.Namespace, writer: EventWriter) -> int:
             **summary,
             "private_evidence_available": campaign_evidence_path(args.run).is_file(),
             "private_review_count": len(entries),
+            **operator_commands(args.run),
         }
         writer.emit("review.pending", review_data)
         writer.emit("result", {**review_data, "exit_code": code})

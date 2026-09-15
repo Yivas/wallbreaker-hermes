@@ -106,6 +106,10 @@ store the decisions. Nothing is written before `a`, it refuses to start without 
 terminal, and it keeps the bodies on screen instead of printing them all at once. Run it yourself;
 deriving or reproducing bodies through the agent remains forbidden.
 
+The pending-review event carries the same two controls as `interactive_command` and
+`show_evidence_command`, already written with the absolute report path. Hand those to the operator
+so they can run them from any directory instead of navigating to the campaign folder.
+
 Delete the sidecar only after all reviews resolve and verification succeeds. Deletion does not
 remove backups or storage snapshots.
 

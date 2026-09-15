@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -103,9 +104,7 @@ def test_review_app_marks_decisions_without_writing_until_apply():
 
 def test_review_app_navigates_with_arrows_and_fills_the_body():
     async def run():
-        app = build_review_app(
-            "synthetic-run.json", load=_fake_load, store=lambda *args: None
-        )
+        app = build_review_app("synthetic-run.json", load=_fake_load, store=lambda *args: None)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             first_body = app.body_text
@@ -161,9 +160,7 @@ def test_interactive_review_runs_the_app_and_emits_events(monkeypatch, capsys):
     assert "review.finished" in output
 
 
-def test_interactive_review_skips_the_screen_when_nothing_is_pending(
-    monkeypatch, capsys
-):
+def test_interactive_review_skips_the_screen_when_nothing_is_pending(monkeypatch, capsys):
     calls = []
     monkeypatch.setattr("wallbreaker.hermes_cli.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("wallbreaker.hermes_cli.sys.stdout.isatty", lambda: True)
@@ -206,6 +203,32 @@ def test_review_app_handles_an_empty_pending_list():
             assert app.decisions == {}
 
     asyncio.run(run())
+
+
+def test_pending_review_lists_ready_to_run_commands(monkeypatch, capsys, tmp_path):
+    report = tmp_path / "run.json"
+    report.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        "wallbreaker.hermes_cli.load_campaign_report",
+        lambda path: {"status": "partial", "repetitions": []},
+    )
+    monkeypatch.setattr(
+        "wallbreaker.hermes_cli._summary",
+        lambda value: {"status": "partial", "pending_review_ids": ["1" * 64]},
+    )
+    monkeypatch.setattr("wallbreaker.hermes_cli.campaign_evidence_path", lambda path: report)
+    monkeypatch.setattr("wallbreaker.hermes_cli.load_campaign_evidence", lambda path, value: {})
+    monkeypatch.setattr("wallbreaker.hermes_cli.private_review_entries", lambda *a: ())
+
+    code = main(["hermes", "review", str(report)])
+
+    assert code == 2
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    data = next(event["data"] for event in events if event["event"] == "review.pending")
+    expected = f'wallbreaker hermes review "{report.resolve()}"'
+    assert data["interactive_command"] == expected + " --interactive"
+    assert data["show_evidence_command"] == expected + " --show-evidence"
+    assert "response" not in data
 
 
 def test_interactive_review_is_listed_in_help(capsys):

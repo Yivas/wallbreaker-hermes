@@ -75,8 +75,7 @@ def load_pending(
     report = load_campaign_report(report_path)
     evidence = load_campaign_evidence(report_path, report)
     entries = {
-        entry["attempt_id"]: dict(entry)
-        for entry in private_review_entries(report, evidence)
+        entry["attempt_id"]: dict(entry) for entry in private_review_entries(report, evidence)
     }
     pending: list[str] = []
     signals: dict[str, dict] = {}
@@ -165,9 +164,7 @@ def build_review_app(
             self.update_status()
 
         def summary_line(self, attempt_id: str) -> str:
-            objective = safe_terminal_text(
-                self.entries.get(attempt_id, {}).get("objective", "")
-            )
+            objective = safe_terminal_text(self.entries.get(attempt_id, {}).get("objective", ""))
             lines = [line for line in objective.splitlines() if line.strip()]
             return (lines[0] if lines else "sin objetivo")[:58]
 
@@ -226,9 +223,7 @@ def build_review_app(
             self.query_one("#detail").scroll_home(animate=False)
 
         def update_status(self) -> None:
-            self.status_text = (
-                f"pending {len(self.pending)}   marked {len(self.decisions)}"
-            )
+            self.status_text = f"pending {len(self.pending)}   marked {len(self.decisions)}"
             self.query_one("#status", Static).update(Text(self.status_text))
 
         # -- actions -------------------------------------------------------
@@ -259,9 +254,7 @@ def build_review_app(
             try:
                 store(self.campaign_report, dict(self.decisions))
             except Exception as error:  # surfaced in the UI, not swallowed
-                self.notify(
-                    f"Error: {type(error).__name__}", severity="error", timeout=10
-                )
+                self.notify(f"Error: {type(error).__name__}", severity="error", timeout=10)
                 return
             applied = len(self.decisions)
             self.decisions.clear()

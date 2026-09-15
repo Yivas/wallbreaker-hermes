@@ -35,6 +35,10 @@ skill's execution and review gates.
   without presenting the same approval again.
 - Report the result, the unresolved issue, and the next necessary action. Distinguish observed
   evidence, operator-reported facts, and hypotheses. Do not claim a fix from one successful sample.
+- When you need a decision, ask with two to four numbered options and your recommendation first,
+  one question at a time. When the answer needs an interactive terminal, hand the operator the
+  ready-to-run command from the event (`interactive_command` or `show_evidence_command`), which
+  already carries an absolute path, and do not tell them to change directory.
 
 ## Coordinator requirements
 

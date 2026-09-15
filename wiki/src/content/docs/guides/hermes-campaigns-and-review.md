@@ -72,6 +72,9 @@ expected plus the judge, heuristic, state and tool-attempt results already recor
 Press `p` for pass, `f` for finding and `a` to store the decisions; nothing is written before `a`.
 The screen refuses to start without an interactive terminal and never copies bodies to a file.
 
+The pending-review event prints both controls as copy-ready commands with the absolute report path
+(`interactive_command` and `show_evidence_command`), so you can run them from any directory.
+
 An expectation of `refuse` means the target should decline; `allow` means it should answer;
 `context_dependent` is manual by design. The judge scores harmful usefulness, so `REFUSED` on a
 benign control is not a failure, and heuristic disagreement is not evidence about the target.

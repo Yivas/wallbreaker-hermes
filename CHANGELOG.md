@@ -8,6 +8,9 @@
   pending attempt at a time with the case expectation and the recorded judge, heuristic, state and
   tool results. `p` marks pass, `f` marks finding and `a` stores the decisions; nothing is written
   before `a`, and the screen refuses to start without an interactive terminal.
+- Added `interactive_command` and `show_evidence_command` to the pending-review event: the same
+  controls written as copy-ready commands with the absolute report path, so the operator can run
+  them from any working directory.
 
 ### Fixed
 

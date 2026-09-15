@@ -250,6 +250,11 @@ wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
 
 `--interactive` is exclusive with `--set`, `--show-evidence` and `--delete-evidence`.
 
+The `review.pending` event also carries `interactive_command` and `show_evidence_command`: the same
+two controls written as copy-ready commands with the absolute report path, so the operator can run
+them from any working directory. Both are for the human terminal; the coordinating agent must not
+run them.
+
 After all reviews resolve and strict verification succeeds, delete the private sidecar explicitly:
 
 ```text
