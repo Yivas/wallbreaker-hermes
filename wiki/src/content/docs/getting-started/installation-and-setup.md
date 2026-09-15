@@ -15,7 +15,7 @@ sidebar:
 ## Install the release
 
 ```bash
-python -m pip install wallbreaker-hermes==0.5.0
+python -m pip install wallbreaker-hermes==0.6.0
 wallbreaker --help
 wallbreaker check
 ```

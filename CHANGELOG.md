@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-09-15
 
 ### Fixed
 
@@ -12,6 +12,23 @@
   refusal.
 - The lexical heuristic recognises Spanish refusal wording, and Spanish hedging, in the opening of a
   reply instead of scoring a long Spanish refusal as compliance by its length alone.
+
+### Compatibility
+
+- The campaign engine, report schemas and dependencies are unchanged; this release corrects how the
+  existing judge and heuristic grade a reply.
+- Scores from earlier releases are not directly comparable with this one: a benign objective is now
+  graded by whether the target answered it.
+- The separate target remains fixed to Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.6.0
+```
+
+Compare: [v0.5.0...v0.6.0](https://github.com/Yivas/wallbreaker-hermes/compare/v0.5.0...v0.6.0).
 
 ## 0.5.0 - 2026-09-15
 
