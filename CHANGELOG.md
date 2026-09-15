@@ -1,6 +1,53 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 - 2026-09-16
+
+### Added
+
+- `wallbreaker hermes review RUN --explain`: prints why the heuristic labelled each pending attempt,
+  with the measurements behind an illegible-output verdict, and keeps private bodies out of the event
+  stream.
+- Operator-supplied batteries: any battery source now accepts `file:PATH`, with a closed schema, size
+  and count limits, a per-item language label (any label, no closed list), a `languages()` helper and
+  a `language=` filter, plus an optional `<name>.sha256` pin that fails closed when the content
+  changes. The harness ships no content, so a private battery stays private.
+- `WALLBREAKER_REFUSAL_MARKERS` lets an operator add refusal wording for a language the tool does not
+  know, with a one-time warning on stderr when the file exists but cannot be used.
+
+### Changed
+
+- A campaign report is no longer tied to the exact package version that produced it. The producing
+  version is still recorded and now reported as such, and the target baseline is still enforced, but
+  a structurally valid report can be reviewed and verified after an upgrade instead of requiring a
+  matching copy of the tool.
+- The illegible-output detector is script aware. A fluent reply in Japanese, Arabic, Chinese or
+  Russian is no longer reported as a scrambled output: the word-shaped and vowel rules apply only to
+  scripts where they mean something, and repeated tokens are checked in every script.
+
+### Fixed
+
+- A bundled battery name can no longer be shadowed by a local file of the same name, and an empty
+  digest pin is refused instead of raising an unhandled error.
+- Battery size is checked before the file is read, and a path that is not a regular file is refused
+  with a clear error.
+- `review --explain` pairs each body with the signals of its own fire, and sanitises the reason it
+  prints.
+
+### Compatibility
+
+- Existing reports, suites, CLI arguments and Python dependencies are unchanged. Reports produced by
+  earlier releases are now readable by this one.
+- The separate target remains fixed to Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.7.0
+```
+
+Compare: [v0.6.1...v0.7.0](https://github.com/Yivas/wallbreaker-hermes/compare/v0.6.1...v0.7.0).
+
 
 ### Added
 
