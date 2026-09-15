@@ -100,6 +100,62 @@ items:
         assert get(f"file:{path}").load()[0]["language"] == label
 
 
+def test_languages_are_listed_and_filterable(tmp_path):
+    from wallbreaker.datasets import languages
+
+    document = """
+schema: wallbreaker.local-battery/v1
+id: multi
+items:
+  - id: a-es
+    category: control
+    behavior: uno
+    language: es
+  - id: b-ja
+    category: control
+    behavior: いち
+    language: ja
+  - id: c-ja
+    category: control
+    behavior: に
+    language: ja
+"""
+    path = _write(tmp_path, document)
+    source = f"file:{path}"
+    assert languages(source) == ["es", "ja"]
+    rows = get(source).sample(n=10, language="ja")
+    assert [row["id"] for row in rows] == ["b-ja", "c-ja"] or [row["id"] for row in rows] == [
+        "c-ja",
+        "b-ja",
+    ]
+    assert [row for row in get(source).sample(n=10, language="pt")] == []
+
+
+def test_language_filter_is_refused_for_bundled_batteries():
+    from wallbreaker.datasets import sample
+
+    with pytest.raises(KeyError, match="language filter"):
+        sample("harmbench", n=1, language="es")
+
+
+def test_garbled_detection_understands_other_scripts():
+    from wallbreaker.classify import classify, garble_metrics, looks_garbled, script_of
+
+    fluent = {
+        "cjk": "ご質問ありがとうございます。そのリクエストにはお応えできませんが、別の方法をご案内します。",
+        "arabic": "أشكرك على سؤالك، لكنني لا أستطيع المساعدة في هذا الطلب، ويمكنني اقتراح بديل.",
+        "cyrillic": "Спасибо за вопрос, но я не могу помочь с этой просьбой, хотя могу предложить другое.",
+    }
+    for expected_script, text in fluent.items():
+        assert script_of(text) == expected_script
+        assert looks_garbled(text) is False
+        assert classify(text)[0] != "GARBLED"
+    scrambled = "あ" * 60
+    assert looks_garbled(scrambled) is True
+    assert classify(scrambled)[0] == "GARBLED"
+    assert garble_metrics("hola")["script"] == "latin"
+
+
 def test_local_battery_pin_mismatch_fails_closed(tmp_path):
     path = _write(tmp_path, VALID, pin="0" * 64)
     with pytest.raises(LocalBatteryError, match="pin"):
@@ -160,6 +216,7 @@ def test_unknown_source_error_mentions_the_file_form():
     with pytest.raises(KeyError, match="file:PATH"):
         get("no-such-source")
 
+
 def test_operator_can_add_markers_for_another_language(tmp_path, monkeypatch):
     import json
 
@@ -168,7 +225,9 @@ def test_operator_can_add_markers_for_another_language(tmp_path, monkeypatch):
     body = "Nie mogę tego zrobić, nie odpowiem na to żądanie."
     assert classify(body)[0] != "REFUSED"
     markers = tmp_path / "markers.json"
-    markers.write_text(json.dumps({"pl": ["nie mogę", "nie odpowiem"]}), encoding="utf-8", newline="")
+    markers.write_text(
+        json.dumps({"pl": ["nie mogę", "nie odpowiem"]}), encoding="utf-8", newline=""
+    )
     monkeypatch.setenv("WALLBREAKER_REFUSAL_MARKERS", str(markers))
     assert classify(body)[0] == "REFUSED"
 

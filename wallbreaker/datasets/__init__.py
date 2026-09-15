@@ -45,16 +45,46 @@ def load(source: str | None = "harmbench") -> list[dict]:
     return get(source).load()
 
 
+def languages(source: str | None = "harmbench") -> list[str]:
+    """Languages a battery declares. Only a local battery can declare them."""
+    loader = get(source)
+    if not hasattr(loader, "languages"):
+        raise KeyError(f"source '{source}' does not declare languages")
+    return loader.languages()
+
+
 def categories(source: str | None = "harmbench") -> list[str]:
     return get(source).categories()
 
 
-def sample(source: str | None = "harmbench", category=None, n: int = 8, seed: int = 0) -> list[dict]:
-    return get(source).sample(category, n, seed)
+def sample(
+    source: str | None = "harmbench",
+    category=None,
+    n: int = 8,
+    seed: int = 0,
+    language: str | None = None,
+) -> list[dict]:
+    loader = get(source)
+    if language is None:
+        return loader.sample(category, n, seed)
+    if not hasattr(loader, "languages"):
+        raise KeyError(f"source '{source}' does not support a language filter")
+    return loader.sample(category, n, seed, language=language)
 
 
-async def battery(source: str | None = "harmbench", category=None, n: int = 8, seed: int = 0) -> list[str] | None:
-    return await get(source).battery(category, n, seed)
+async def battery(
+    source: str | None = "harmbench",
+    category=None,
+    n: int = 8,
+    seed: int = 0,
+    language: str | None = None,
+) -> list[str] | None:
+    loader = get(source)
+    if language is None:
+        return await loader.battery(category, n, seed)
+    if not hasattr(loader, "languages"):
+        raise KeyError(f"source '{source}' does not support a language filter")
+    return await loader.battery(category, n, seed, language=language)
 
 
 __all__ = [
@@ -64,6 +94,7 @@ __all__ = [
     "get",
     "load",
     "categories",
+    "languages",
     "sample",
     "battery",
 ]

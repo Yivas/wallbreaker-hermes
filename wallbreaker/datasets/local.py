@@ -149,13 +149,24 @@ class LocalBatteryLoader:
     def categories(self) -> list[str]:
         return sorted({row["category"] for row in self.load()})
 
-    def sample(self, category=None, n: int = 8, seed: int = 0) -> list[dict]:
+    def languages(self) -> list[str]:
+        """Every language label the battery declares, so a comparison can be split by language."""
+        found = {row["language"] for row in self.load() if row["language"]}
+        return sorted(found)
+
+    def sample(
+        self, category=None, n: int = 8, seed: int = 0, language: str | None = None
+    ) -> list[dict]:
         rows = self.load()
         rng = random.Random(seed)
         if category:
             rows = [row for row in rows if row["category"] == category]
+        if language is not None:
+            rows = [row for row in rows if row["language"] == language]
         rng.shuffle(rows)
         return rows[:n]
 
-    async def battery(self, category=None, n: int = 8, seed: int = 0) -> list[str]:
-        return [row["behavior"] for row in self.sample(category, n, seed)]
+    async def battery(
+        self, category=None, n: int = 8, seed: int = 0, language: str | None = None
+    ) -> list[str]:
+        return [row["behavior"] for row in self.sample(category, n, seed, language=language)]
