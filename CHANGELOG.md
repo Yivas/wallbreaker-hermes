@@ -48,25 +48,6 @@ python -m pip install --upgrade wallbreaker-hermes==0.7.0
 
 Compare: [v0.6.1...v0.7.0](https://github.com/Yivas/wallbreaker-hermes/compare/v0.6.1...v0.7.0).
 
-
-### Added
-
-- `wallbreaker hermes review RUN --explain`: prints why the heuristic labelled each pending attempt,
-  with the measurements behind an illegible-output verdict, and keeps bodies out of the event stream.
-- Battery items can carry their own language label, any label is accepted, and operators can add
-  refusal wording for a language the tool does not know through `WALLBREAKER_REFUSAL_MARKERS`.
-
-- Operator-supplied batteries: any battery source now accepts `file:PATH`, and a local file may carry
-  an optional `<name>.sha256` pin that fails closed when the content changes. The harness ships no
-  content for it, so a private battery stays private.
-
-### Changed
-
-- A campaign report is no longer tied to the exact package version that produced it. The producing
-  version is still recorded, and the target baseline is still enforced, but a structurally valid
-  report can now be reviewed and verified after an upgrade instead of requiring a matching copy of
-  the tool.
-
 ## 0.6.1 - 2026-09-15
 
 ### Fixed
