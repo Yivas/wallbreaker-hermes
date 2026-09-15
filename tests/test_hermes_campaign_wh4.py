@@ -806,10 +806,18 @@ def test_report_validation_and_strict_cleanup_gate(tmp_path):
     with pytest.raises(CampaignError, match="invalid"):
         validate_campaign_report(injected)
 
-    wrong_version = copy.deepcopy(report)
-    wrong_version["versions"]["wallbreaker"] = "0.1.0"
+    # A report produced by another release stays readable: the producing version is recorded
+    # but not enforced, so a campaign can still be reviewed and verified after an upgrade.
+    older_release = copy.deepcopy(report)
+    older_release["versions"]["wallbreaker"] = "0.1.0"
+    assert validate_campaign_report(older_release) is older_release
+
+    # The target baseline is still pinned, because it describes the system that produced the
+    # evidence rather than the tool that read it.
+    other_target = copy.deepcopy(report)
+    other_target["versions"]["hermes_commit"] = "f" * 40
     with pytest.raises(CampaignError, match="invalid"):
-        validate_campaign_report(wrong_version)
+        validate_campaign_report(other_target)
 
 
 @pytest.mark.asyncio
