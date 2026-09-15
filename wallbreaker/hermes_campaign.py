@@ -1693,9 +1693,12 @@ def validate_campaign_report(report: dict) -> dict:
     versions = _expect_keys(
         root["versions"], {"wallbreaker", "hermes_agent", "hermes_commit", "suite"}
     )
+    # The producing version is recorded but not enforced: a report that satisfies the schema and
+    # the structural checks stays readable by later releases, so a campaign can be reviewed and
+    # verified after an upgrade instead of needing a matching copy of the tool. Only the target
+    # baseline stays pinned, because it describes the system that produced the evidence.
     if (
         not all(isinstance(value, str) and 0 < len(value) <= 128 for value in versions.values())
-        or versions["wallbreaker"] != __version__
         or versions["hermes_agent"] != HERMES_BASELINE_VERSION
         or versions["hermes_commit"] != HERMES_BASELINE_SHA
         or versions["suite"] != SUITE_SCHEMA

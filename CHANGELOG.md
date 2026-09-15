@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A campaign report is no longer tied to the exact package version that produced it. The producing
+  version is still recorded, and the target baseline is still enforced, but a structurally valid
+  report can now be reviewed and verified after an upgrade instead of requiring a matching copy of
+  the tool.
+
 ## 0.6.1 - 2026-09-15
 
 ### Fixed
