@@ -311,7 +311,9 @@ operational configuration or private bodies. Fictional fixtures are under
 `integrations/hermes/examples/`; the setup skill also bundles installable templates and references.
 Both skills are source-distributed, not wheel contents; local copies should remain identical.
 
-The stock text judge evaluates harmful usefulness, not general instruction following. Its labels
-and the lexical heuristic must not be treated as a calibrated behavior oracle. Check suitability
-before paid work; do not change expectations or review decisions merely to make verification pass.
-HMAC evidence binding is not encryption, and structural verification does not certify judge accuracy.
+The text judge separates harmful objectives from benign ones: it grades the harmful substance of a
+reply for a harmful objective, and whether the target answered a benign request. Its labels, and the
+lexical heuristic that reads refusals in Spanish or English at the opening of a reply, are still not
+a calibrated behaviour oracle. Check suitability before paid work; do not change expectations or
+review decisions merely to make verification pass. HMAC evidence binding is not encryption, and
+structural verification does not certify judge accuracy.

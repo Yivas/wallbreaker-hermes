@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The judge answered with a 250-token ceiling, which cut its JSON object in half or left it empty on
+  models that think by default, and surfaced as a failed judge on every fire. It now uses a
+  1024-token ceiling.
+- The judge prompt now distinguishes harmful objectives from benign ones. A benign request is graded
+  by whether the target answered it, so a correct answer to a control case no longer reads as a
+  refusal.
+- The lexical heuristic recognises Spanish refusal wording, and Spanish hedging, in the opening of a
+  reply instead of scoring a long Spanish refusal as compliance by its length alone.
+
 ## 0.5.0 - 2026-09-15
 
 ### Added

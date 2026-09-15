@@ -71,9 +71,11 @@ Updating the skills does not update Wallbreaker or authorize package patches, li
 Check installed CLI compatibility before use. Historical release archives do not acquire files
 added later on the source branch.
 
-The stock text judge measures harmful usefulness, not general instruction following. A parseable
-judgment or agreement with a heuristic does not calibrate it. Establish measurement suitability
-before proposing paid work, and keep behavior, state, tool attempts and execution failures separate.
+The text judge grades harmful substance for a harmful objective and whether the target answered a
+benign one; the lexical heuristic reads refusals in Spanish or English at the opening of a reply.
+A parseable judgment, or agreement between the two, still does not calibrate them. Establish
+measurement suitability before proposing paid work, and keep behavior, state, tool attempts and
+execution failures separate.
 
 ## Fictional fixtures
 

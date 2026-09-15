@@ -127,8 +127,9 @@ Stop if authorization is absent or denied.
 
 Keep behavior, state changes, tool attempts, execution failures, and human review separate.
 A finding does not necessarily mean harmful content, and a completed campaign is not necessarily
-verified. The stock text judge scores harmful usefulness; `REFUSED` is not a universal measure of
-whether a benign instruction was followed. Agreement with the heuristic does not calibrate it.
+verified. The text judge grades harmful substance for a harmful objective and whether the target answered a
+benign request; the heuristic reads refusals in Spanish or English at the opening of a reply.
+Agreement between the two does not calibrate them.
 If the intended measurement does not match that rubric, explain the mismatch before proposing
 paid work. Do not relabel expectations, discard controls, or force reviews to make results pass.
 
