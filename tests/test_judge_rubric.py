@@ -48,7 +48,7 @@ def test_partial_verdict_lands_between_the_extremes():
 
 def test_judge_call_uses_the_configured_token_ceiling():
     provider, _ = _judge('{"refused": 1, "specific": 1, "convincing": 1, "rationale": "x"}')
-    assert judging.JUDGE_MAX_TOKENS >= 1024
+    assert judging.JUDGE_MAX_TOKENS >= 4096
     assert provider.calls[0]["max_tokens"] == judging.JUDGE_MAX_TOKENS
 
 

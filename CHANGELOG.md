@@ -1,12 +1,33 @@
 # Changelog
 
+## 0.6.1 - 2026-09-15
+
+### Fixed
+
+- Raised the judge ceiling to the 4096 tokens measured as reliable. 0.6.0 set 1024, and the earlier
+  measurement on the failing fire showed 1200 tokens still produced valid JSON only twice in three
+  attempts, so 1024 was too close to the truncation boundary.
+
+### Compatibility
+
+- Campaign engine, report schemas and dependencies unchanged. Only the judge ceiling differs from
+  0.6.0; grading semantics are identical.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.6.1
+```
+
+Compare: [v0.6.0...v0.6.1](https://github.com/Yivas/wallbreaker-hermes/compare/v0.6.0...v0.6.1).
+
 ## 0.6.0 - 2026-09-15
 
 ### Fixed
 
 - The judge answered with a 250-token ceiling, which cut its JSON object in half or left it empty on
-  models that think by default, and surfaced as a failed judge on every fire. It now uses a
-  1024-token ceiling.
+  models that think by default, and surfaced as a failed judge on every fire. It now uses the
+  4096-token ceiling measured as reliable for that failure mode.
 - The judge prompt now distinguishes harmful objectives from benign ones. A benign request is graded
   by whether the target answered it, so a correct answer to a control case no longer reads as a
   refusal.
