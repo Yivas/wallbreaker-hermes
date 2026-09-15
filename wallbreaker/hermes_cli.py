@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import hmac
 import json
-import re
 import sys
 
 from . import __version__
@@ -33,6 +32,7 @@ from .hermes_lab import (
     HERMES_BASELINE_SHA,
     HERMES_BASELINE_VERSION,
 )
+from .hermes_review import safe_terminal_text
 from .providers.base import ProviderError
 
 
@@ -119,6 +119,11 @@ def add_hermes_parser(subparsers) -> None:
         "--show-evidence",
         action="store_true",
         help="Show private review bodies on an interactive local terminal",
+    )
+    review.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Resolve pending reviews in an interactive local terminal",
     )
     review.add_argument(
         "--delete-evidence",
@@ -264,26 +269,42 @@ def _run_command(args: argparse.Namespace, writer: EventWriter) -> int:
     return code
 
 
-def _safe_terminal_text(value: str) -> str:
-    return re.sub(
-        r"[\x00-\x08\x0b-\x1f\x7f-\x9f]",
-        lambda match: f"\\x{ord(match.group()):02x}",
-        value,
-    )
-
-
 def _display_private_reviews(entries: tuple[dict, ...]) -> None:
     for entry in entries:
         print(
             f"\n[private review {entry['attempt_id']} fire {entry['fire_index'] + 1}]",
             file=sys.stderr,
         )
-        print(f"Objective:\n{_safe_terminal_text(entry['objective'])}", file=sys.stderr)
-        print(f"\nPrompt:\n{_safe_terminal_text(entry['prompt'])}", file=sys.stderr)
-        print(f"\nResponse:\n{_safe_terminal_text(entry['response'])}", file=sys.stderr)
+        print(f"Objective:\n{safe_terminal_text(entry['objective'])}", file=sys.stderr)
+        print(f"\nPrompt:\n{safe_terminal_text(entry['prompt'])}", file=sys.stderr)
+        print(f"\nResponse:\n{safe_terminal_text(entry['response'])}", file=sys.stderr)
 
 
 def _review_command(args: argparse.Namespace, writer: EventWriter) -> int:
+    if args.interactive:
+        if args.decisions or args.show_evidence or args.delete_evidence:
+            raise CampaignError(
+                "--interactive cannot be combined with --set, --show-evidence or "
+                "--delete-evidence."
+            )
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise CampaignError("Private review evidence requires an interactive local terminal.")
+        report = load_campaign_report(args.run)
+        summary = _summary(report)
+        if not summary["pending_review_ids"]:
+            writer.emit("review.pending", {**summary, "private_review_count": 0})
+            code = _result_code(report)
+            writer.emit("result", {**summary, "exit_code": code})
+            return code
+        writer.emit("review.started", {"pending_review_count": len(summary["pending_review_ids"])})
+        from .hermes_review import run_review
+
+        run_review(args.run)
+        report = load_campaign_report(args.run)
+        summary = _summary(report)
+        code = _result_code(report)
+        writer.emit("review.finished", {**summary, "exit_code": code})
+        return code
     decisions = _parse_decisions(args.decisions) if args.decisions else {}
     report = load_campaign_report(args.run)
     summary = _summary(report)

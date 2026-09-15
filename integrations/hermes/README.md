@@ -94,10 +94,17 @@ The operator reviews bodies in a separate interactive terminal:
 
 ```text
 wallbreaker hermes review RUN --show-evidence
+wallbreaker hermes review RUN --interactive
 wallbreaker hermes review RUN --set ATTEMPT=pass
 wallbreaker hermes verify RUN
 wallbreaker hermes review RUN --delete-evidence
 ```
+
+`--interactive` opens a terminal review screen: one pending attempt at a time, the case expectation
+and the recorded judge, heuristic, state and tool results, `p` for pass, `f` for finding and `a` to
+store the decisions. Nothing is written before `a`, it refuses to start without an interactive
+terminal, and it keeps the bodies on screen instead of printing them all at once. Run it yourself;
+deriving or reproducing bodies through the agent remains forbidden.
 
 Delete the sidecar only after all reviews resolve and verification succeeds. Deletion does not
 remove backups or storage snapshots.

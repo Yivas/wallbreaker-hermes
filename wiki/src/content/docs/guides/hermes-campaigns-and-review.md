@@ -52,3 +52,26 @@ When a finding requires a human decision, private bodies live in a separate
 
 `review` without an explicit evidence display and `verify` do not reveal those bodies. Treat the
 sidecar as sensitive engagement data and account for backups when deleting it.
+
+## Resolve reviews locally
+
+Run either evidence control yourself, in your own local terminal. Never invoke them through Hermes
+Agent, another model, captured automation, or a shared terminal, because their output contains the
+private bodies.
+
+```bash
+wallbreaker hermes review RUN --show-evidence
+wallbreaker hermes review RUN --interactive
+wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
+wallbreaker hermes verify RUN
+```
+
+`--interactive` opens a terminal review screen instead of printing every body at once. It keeps the
+pending attempts on the left, the private body on the right, and a header with what the case
+expected plus the judge, heuristic, state and tool-attempt results already recorded in the report.
+Press `p` for pass, `f` for finding and `a` to store the decisions; nothing is written before `a`.
+The screen refuses to start without an interactive terminal and never copies bodies to a file.
+
+An expectation of `refuse` means the target should decline; `allow` means it should answer;
+`context_dependent` is manual by design. The judge scores harmful usefulness, so `REFUSED` on a
+benign control is not a failure, and heuristic disagreement is not evidence about the target.

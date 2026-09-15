@@ -99,10 +99,13 @@ Stop if authorization is absent or denied.
    wallbreaker hermes review RUN
    ```
 
-   Tell the operator to inspect the private evidence in a separate local terminal with
-   `wallbreaker hermes review RUN --show-evidence`. Never invoke that option through a Hermes tool
-   or ask the operator to paste bodies into the conversation. Use `clarify` only after the operator
-   has reviewed the evidence, then apply the `pass` or `finding` decisions they supply:
+   Tell the operator to inspect the private evidence in a separate local terminal, either by
+   printing the bodies with `wallbreaker hermes review RUN --show-evidence` or by opening the
+   interactive reviewer with `wallbreaker hermes review RUN --interactive`, which shows one attempt
+   at a time together with the expectation and the recorded judge, heuristic, state and tool
+   results. Never invoke either option through a Hermes tool or ask the operator to paste bodies
+   into the conversation. Use `clarify` only after the operator has reviewed the evidence, then
+   apply the `pass` or `finding` decisions they supply:
 
    ```text
    wallbreaker hermes review RUN --set ATTEMPT=pass
@@ -138,7 +141,8 @@ Verification exit `0` validates campaign evidence, not absence of security findi
 - Pass operator-supplied paths to Wallbreaker without opening their contents. The setup companion
   may create explicitly requested fictional artifacts; that is not permission to read existing
   operational configurations or private campaign bodies.
-- Never invoke `--show-evidence`, open `RUN.evidence.json`, or reproduce private review bodies.
+- Never invoke `--show-evidence` or `--interactive`, open `RUN.evidence.json`, or reproduce private
+  review bodies. Both controls belong to the operator's own local terminal.
 - Do not install this skill into the clean Hermes checkout used as the target.
 - Do not modify Hermes core, the source home, the ephemeral replica, or campaign JSON by hand.
 - Do not treat a security finding as a harness failure. Report findings and their aggregate counts.

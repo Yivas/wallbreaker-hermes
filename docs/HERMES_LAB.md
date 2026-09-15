@@ -233,11 +233,22 @@ option through Hermes Agent, another model, captured automation, or a shared ter
 wallbreaker hermes review RUN --show-evidence
 ```
 
+The same terminal control has an interactive screen that shows one pending attempt at a time with
+the case expectation and the signals the report already holds (judge, heuristic, state and tool
+attempts). `p` marks pass, `f` marks finding and `a` stores the decisions; the screen writes nothing
+before `a`, refuses to start without an interactive terminal, and never copies bodies to a file:
+
+```text
+wallbreaker hermes review RUN --interactive
+```
+
 Apply decisions supplied by the operator:
 
 ```text
 wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
 ```
+
+`--interactive` is exclusive with `--set`, `--show-evidence` and `--delete-evidence`.
 
 After all reviews resolve and strict verification succeeds, delete the private sidecar explicitly:
 

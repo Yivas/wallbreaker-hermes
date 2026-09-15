@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `wallbreaker hermes review RUN --interactive`, a terminal review screen that shows one
+  pending attempt at a time with the case expectation and the recorded judge, heuristic, state and
+  tool results. `p` marks pass, `f` marks finding and `a` stores the decisions; nothing is written
+  before `a`, and the screen refuses to start without an interactive terminal.
+
+### Fixed
+
+- Normalised carriage returns in the private review display so Windows bodies no longer render
+  `\x0d` escapes before every line.
+
 ## 0.4.0 - 2026-09-15
 
 ### Added
