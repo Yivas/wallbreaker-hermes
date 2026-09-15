@@ -29,7 +29,7 @@ async def _leaderboard(args: dict, ctx: ToolContext) -> str:
     if not behaviors:
         from .. import datasets
 
-        source = str(args.get("source", "harmbench")).lower()
+        source = str(args.get("source", "harmbench"))
         behaviors = await datasets.battery(
             source=source,
             category=args.get("category"),

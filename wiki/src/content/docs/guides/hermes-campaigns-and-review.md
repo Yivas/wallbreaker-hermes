@@ -68,12 +68,18 @@ items:
     behavior: "one objective per item"
 ```
 
-Use it wherever a battery is accepted, by prefixing the path with `file:`:
+Use it wherever a battery is accepted, by prefixing the path with `file:`. From Python, which is
+what the sweep tools call under the hood:
 
-```text
-/sysprompt test --source file:/path/to/battery.yaml
-wallbreaker hermes run suite.yaml --config config.toml --output RUN --dry-run
+```python
+from wallbreaker import datasets
+
+rows = datasets.sample("file:/path/to/battery.yaml", n=8, language="ja")
+tasks = asyncio.run(datasets.battery("file:/path/to/battery.yaml"))
 ```
+
+The sweep tools still take a bundled name; a local battery is reached through `datasets`, and passing
+a `language` requires a local battery because only it declares languages.
 
 Each item may carry its own `language` label and any label is accepted; there is no closed list of
 languages. If a file called `battery.yaml.sha256` sits next to it, its digest must match or the load
@@ -86,7 +92,7 @@ the judge grades the content itself and needs no such list.
 To question a label, ask for the reasoning instead of guessing:
 
 ```text
-hermes review RUN --explain
+wallbreaker hermes review RUN --explain
 ```
 
 Two notes on method:

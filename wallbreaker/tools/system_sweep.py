@@ -71,7 +71,7 @@ async def _system_sweep(args: dict, ctx: ToolContext) -> str:
     if not tasks:
         from .. import datasets
 
-        source = str(args.get("source", "harmbench")).lower()
+        source = str(args.get("source", "harmbench"))
         category = args.get("category") or (
             "cybercrime_intrusion" if source == "harmbench" else None
         )
@@ -329,7 +329,7 @@ def register(registry: ToolRegistry) -> None:
                 },
                 "source": {
                     "type": "string",
-                    "description": "Dataset source: harmbench, jbb, strongreject, or advbench.",
+                    "description": "Dataset source: harmbench, jbb, strongreject, advbench, or file:PATH for your own battery.",
                 },
                 "category": {
                     "type": "string",

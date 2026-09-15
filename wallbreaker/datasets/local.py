@@ -24,6 +24,7 @@ import hashlib
 import json
 import random
 import re
+import stat
 from pathlib import Path
 
 import yaml
@@ -41,16 +42,29 @@ class LocalBatteryError(ValueError):
 
 def _read_document(path: Path) -> dict:
     try:
-        raw = path.read_bytes()
+        info = path.stat()
     except OSError as exc:
         raise LocalBatteryError(f"cannot read battery: {exc}") from exc
-    if len(raw) > MAX_FILE_BYTES:
+    if not stat.S_ISREG(info.st_mode):
+        raise LocalBatteryError("battery must be a regular file")
+    if info.st_size > MAX_FILE_BYTES:
         raise LocalBatteryError(f"battery is larger than {MAX_FILE_BYTES} bytes")
     pin = path.with_name(path.name + ".sha256")
     if pin.is_file():
-        expected = pin.read_text(encoding="utf-8").strip().split()[0].lower()
-        if hashlib.sha256(raw).hexdigest() != expected:
+        try:
+            pin_size = pin.stat().st_size
+        except OSError as exc:
+            raise LocalBatteryError(f"cannot read the battery pin: {exc}") from exc
+        if pin_size > 4096:
+            raise LocalBatteryError("battery pin is implausibly large")
+        parts = pin.read_text(encoding="utf-8").split()
+        expected = parts[0].lower() if parts else ""
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise LocalBatteryError(f"battery does not match its {pin.name} pin")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise LocalBatteryError(f"cannot read battery: {exc}") from exc
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:

@@ -99,7 +99,7 @@ def _select_ladder(args: dict):
 async def _battery(args: dict, category=None, n=None):
     from .. import datasets
 
-    source = str(args.get("source", "harmbench")).lower()
+    source = str(args.get("source", "harmbench"))
     if n is None:
         n = int(args.get("n", 5))
     behaviors = await datasets.battery(

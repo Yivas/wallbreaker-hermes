@@ -279,7 +279,9 @@ def test_explain_reports_labels_without_bodies(monkeypatch, capsys):
     monkeypatch.setattr("wallbreaker.hermes_cli.load_campaign_evidence", lambda path, r: {})
     monkeypatch.setattr(
         "wallbreaker.hermes_cli.private_review_entries",
-        lambda r, e: ({"attempt_id": attempt, "response": "xq zz qq zz qq zz qq zz qq zz"},),
+        lambda r, e: (
+            {"attempt_id": attempt, "fire_index": 0, "response": "xq zz qq zz qq zz qq zz qq zz"},
+        ),
     )
     monkeypatch.setattr("wallbreaker.hermes_cli._result_code", lambda report: 2)
 

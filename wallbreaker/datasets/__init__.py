@@ -23,22 +23,23 @@ def sources() -> list[str]:
 def get(source: str | None = "harmbench"):
     """Resolve a battery source: a bundled name or a local file.
 
-    A local battery is addressed as ``file:/path/to/battery.yaml`` or by giving an existing
-    path directly. The file format and its optional digest pin are documented by
-    ``wallbreaker.datasets.local``; the harness bundles no content for it.
+    Bundled names win, so a stray file called like one of them cannot silently replace the
+    reference battery. A local battery is addressed as ``file:/path/to/battery.yaml`` or by giving
+    an existing path directly; the file format and its optional digest pin are documented by
+    ``wallbreaker.datasets.local``, which ships no content.
     """
     raw = source or "harmbench"
-    candidate = raw[5:] if raw.lower().startswith("file:") else raw
+    key = raw.lower()
+    if key in DATASETS:
+        return DATASETS[key]
+    candidate = raw[5:] if key.startswith("file:") else raw
     path = Path(candidate)
-    if candidate != "harmbench" and path.is_file():
+    if path.is_file() or path.exists():
         return LocalBatteryLoader(path)
-    loader = DATASETS.get(raw.lower())
-    if loader is None:
-        raise KeyError(
-            f"unknown dataset '{source}'. Known sources: {', '.join(sources())}; "
-            "a local battery can be passed as file:PATH"
-        )
-    return loader
+    raise KeyError(
+        f"unknown dataset '{source}'. Known sources: {', '.join(sources())}; "
+        "a local battery can be passed as file:PATH"
+    )
 
 
 def load(source: str | None = "harmbench") -> list[dict]:

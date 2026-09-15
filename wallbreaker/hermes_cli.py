@@ -8,7 +8,6 @@ import sys
 
 from pathlib import Path
 
-from . import __version__
 from .config import ConfigError, load_config
 from .hermes_campaign import (
     Assessment,
@@ -164,7 +163,9 @@ def _summary(report: dict) -> dict:
     return {
         "status": report["status"],
         "versions": {
-            "wallbreaker": __version__,
+            # The report says which release produced the evidence; the tool that reads it may be
+            # newer, so reporting __version__ here would misattribute the campaign.
+            "wallbreaker": report["versions"]["wallbreaker"],
             "hermes_release": HERMES_BASELINE_RELEASE,
             "hermes_agent": HERMES_BASELINE_VERSION,
             "hermes_commit": HERMES_BASELINE_SHA,
@@ -300,38 +301,43 @@ def operator_commands(run: str | Path) -> dict:
 def _explain_pending(report: dict, entries: tuple[dict, ...]) -> dict:
     """Print why each pending attempt carries its label, with the measurements behind it.
 
-    The bodies are already readable on this terminal by the operator; only the labels and the
-    counts reach stdout, so the event stream stays free of private text.
+    The bodies are already readable on this terminal by the operator; only labels and counts reach
+    stdout, so the event stream stays free of private text. Each body is paired with the signals of
+    its own fire: an attempt can hold several, and mixing them would invent a disagreement.
     """
     from .classify import classify as classify_body
     from .classify import garble_metrics
+    from .hermes_review import safe_terminal_text
 
-    by_id = {entry["attempt_id"]: entry for entry in entries}
+    by_fire = {(entry["attempt_id"], entry["fire_index"]): entry for entry in entries}
     labels: dict[str, int] = {}
     explained = 0
     for repetition in report["repetitions"]:
         attempt = repetition["attempts"][-1]
         if attempt["status"] != "review_required":
             continue
-        entry = by_id.get(attempt["id"], {})
-        body = str(entry.get("response", ""))
         fires = attempt.get("fires") or []
-        behavior = (fires[0].get("behavior") if fires else None) or {}
-        label, reason = classify_body(body)
-        labels[label] = labels.get(label, 0) + 1
-        explained += 1
-        metrics = garble_metrics(body)
-        shown = ", ".join(
-            f"{key}={value:.3f}" if isinstance(value, float) else f"{key}={value}"
-            for key, value in metrics.items()
-        )
-        print(
-            f"\n[explain {attempt['id']}] expected={behavior.get('expected')} "
-            f"judge={behavior.get('judge_label')} recorded_heuristic={behavior.get('heuristic_label')}",
-            file=sys.stderr,
-        )
-        print(f"  heuristic now: {label} ({reason})", file=sys.stderr)
-        print(f"  measurements: {shown}", file=sys.stderr)
+        for index in range(max(len(fires), 0)):
+            entry = by_fire.get((attempt["id"], index))
+            if entry is None:
+                continue
+            body = str(entry.get("response", ""))
+            behavior = (fires[index].get("behavior") if index < len(fires) else None) or {}
+            label, reason = classify_body(body)
+            labels[label] = labels.get(label, 0) + 1
+            explained += 1
+            metrics = garble_metrics(body)
+            shown = ", ".join(
+                f"{key}={value:.3f}" if isinstance(value, float) else f"{key}={value}"
+                for key, value in metrics.items()
+            )
+            print(
+                f"\n[explain {attempt['id']} fire {index + 1}] expected={behavior.get('expected')} "
+                f"judge={behavior.get('judge_label')} recorded_heuristic={behavior.get('heuristic_label')}",
+                file=sys.stderr,
+            )
+            print(f"  heuristic now: {label} ({safe_terminal_text(reason)})", file=sys.stderr)
+            print(f"  measurements: {shown}", file=sys.stderr)
     return {"explained": explained, "heuristic_labels": labels}
 
 

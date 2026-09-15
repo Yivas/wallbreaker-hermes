@@ -250,7 +250,8 @@ wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
 
 `--explain` prints, for every pending attempt, the label the heuristic gives the body now, the
 reason for it and the measurements behind an illegible-output verdict, so a `GARBLED` label can be
-challenged with numbers. Only labels and counts reach stdout:
+challenged with numbers. No private body reaches stdout; the event carries status, fingerprints,
+aggregates and labels:
 
 ```text
 wallbreaker hermes review RUN --explain

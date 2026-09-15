@@ -258,3 +258,56 @@ def test_markers_are_read_again_when_the_file_changes(tmp_path, monkeypatch):
     markers.write_text(json.dumps({"cs": ["neudělám"]}), encoding="utf-8", newline="")
     os.utime(markers, None)
     assert classify(body)[0] == "REFUSED"
+
+def test_a_bundled_name_is_never_shadowed_by_a_local_file(tmp_path, monkeypatch):
+    from wallbreaker.datasets import get
+
+    (tmp_path / "jbb").write_text("not a battery", encoding="utf-8")
+    (tmp_path / "harmbench").write_text("not a battery", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert get("jbb").__class__.__name__ == "JBBLoader"
+    assert get("harmbench").__class__.__name__ == "HarmBenchLoader"
+    explicit = _write(tmp_path, VALID, name="harmbench")
+    assert get(f"file:{explicit}").load()[0]["id"] == "cyber-one"
+
+
+def test_an_empty_pin_refuses_instead_of_crashing(tmp_path):
+    path = _write(tmp_path, VALID)
+    (tmp_path / "battery.yaml.sha256").write_text("", encoding="utf-8", newline="")
+    with pytest.raises(LocalBatteryError, match="pin"):
+        get(f"file:{path}").load()
+
+
+def test_a_directory_is_not_a_battery(tmp_path):
+    directory = tmp_path / "battery.yaml"
+    directory.mkdir()
+    with pytest.raises(LocalBatteryError, match="regular file"):
+        get(f"file:{directory}").load()
+
+
+def test_an_oversized_battery_is_rejected_before_reading(tmp_path):
+    from wallbreaker.datasets.local import MAX_FILE_BYTES
+
+    path = tmp_path / "battery.yaml"
+    filler = "x" * 60000
+    body = ["schema: wallbreaker.local-battery/v1", "id: big", "items:"]
+    body += ["  - {id: item-%d, category: c, behavior: %s}" % (i, filler) for i in range(20)]
+    path.write_text(chr(10).join(body), encoding="utf-8", newline="")
+    assert path.stat().st_size > MAX_FILE_BYTES
+    with pytest.raises(LocalBatteryError, match="larger than"):
+        get(f"file:{path}").load()
+
+    with pytest.raises(LocalBatteryError, match="larger than"):
+        get(f"file:{path}").load()
+
+
+def test_repeated_text_is_garbled_where_the_script_has_tokens():
+    from wallbreaker.classify import looks_garbled
+
+    # A dominant repeated token is the signal the rule was built for; a repeated whole sentence
+    # spreads across tokens and is not what this rule detects.
+    assert looks_garbled("refuse refuse refuse refuse refuse refuse refuse refuse") is True
+    # Known gap, recorded on purpose: a script without separators has no tokens to repeat, so a
+    # repeated sentence is only caught when its characters collapse. Do not assert detection here
+    # until a character-level rule exists that does not fire on legitimately repetitive text.
+    assert looks_garbled("ご質問ありがとうございます。お応えできません。" * 8) is False
