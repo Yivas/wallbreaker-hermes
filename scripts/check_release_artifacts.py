@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 DISTRIBUTION = "wallbreaker-hermes"
-VERSION = "0.3.2"
+VERSION = "0.4.0"
 WHEEL_PREFIX = f"wallbreaker_hermes-{VERSION}-"
 SDIST_NAME = f"wallbreaker_hermes-{VERSION}.tar.gz"
 HERMES_SKILLS = ("wallbreaker-hermes", "wallbreaker-campaign-setup")
@@ -142,9 +142,17 @@ def check_source_versions(root: Path) -> None:
     package = json.loads(
         (root / "wallbreaker/dashboard/web/package.json").read_text(encoding="utf-8")
     )
+    package_lock = json.loads(
+        (root / "wallbreaker/dashboard/web/package-lock.json").read_text(encoding="utf-8")
+    )
     init = (root / "wallbreaker/__init__.py").read_text(encoding="utf-8")
     if package["version"] != VERSION:
         fail("dashboard version is out of sync")
+    if (
+        package_lock["version"] != VERSION
+        or package_lock["packages"][""]["version"] != VERSION
+    ):
+        fail("dashboard lock version is out of sync")
     if f'__version__ = "{VERSION}"' not in init:
         fail("Python version is out of sync")
     for name in HERMES_SKILLS:

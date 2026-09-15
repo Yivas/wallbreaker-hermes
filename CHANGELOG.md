@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.4.0 - 2026-09-15
+
+### Added
+
+- Added the public `wallbreaker-campaign-setup` companion skill, with fictional suite,
+  configuration and manifest templates plus artifact preparation and offline diagnosis references.
+- Included both skills and all setup companions in source-distribution checks. Skills remain
+  installed separately from GitHub and are not included in the Python wheel.
+
+### Fixed
+
+- Reuse operator decisions and answer informational questions without restarting campaign intake
+  or repeating a declined approval. Execution still requires authorization of the exact dry-run plan.
+- Clarified that the stock judge measures harmful usefulness, not general instruction following;
+  parser acceptance, heuristic agreement and structural verification do not establish calibration.
+- Separated behavior, state, tool attempts, failed execution and pending human review. Documented
+  that HMAC binds evidence but does not encrypt the private sidecar.
+- Kept diagnosis offline by default: paid probes, evaluator changes and package maintenance require
+  their own scope and authorization. Local skill copies should match the public source without
+  disabling filesystem protections.
+
+### Compatibility
+
+- No changes to the campaign engine, CLI behavior, judge implementation, report schemas or dependencies.
+- The separate target remains fixed to Hermes Agent `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`; the usual coordinator is capability-based.
+- Updating skills does not update the installed package or authorize live campaigns.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.4.0
+hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-hermes
+hermes skills install Yivas/wallbreaker-hermes/integrations/hermes/skills/wallbreaker-campaign-setup
+```
+
+Start a new coordinator conversation after refreshing previously loaded skills. Preserve local
+access controls during authorized installation. Generate and approve a fresh dry-run plan before
+any campaign after a package upgrade.
+
+Compare: [v0.3.2...v0.4.0](https://github.com/Yivas/wallbreaker-hermes/compare/v0.3.2...v0.4.0).
+
 ## 0.3.2 - 2026-09-14
 
 ### Fixed

@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.check_release_artifacts import SETUP_FILES, VERSION, check_sdist
+from scripts.check_release_artifacts import (
+    SETUP_FILES,
+    VERSION,
+    check_sdist,
+    check_source_versions,
+)
 
 from wallbreaker.hermes_campaign import load_suite
 from wallbreaker.hermes_lab import (
@@ -165,6 +170,10 @@ def test_setup_templates_reuse_public_fictional_contracts():
     assert manifest["expected_tool_count"] == 0
     assert config["profiles"][config["default_profile"]]["base_url"] == "https://api.example.invalid/v1"
     assert "api_key" not in config["target"]
+
+
+def test_release_versions_include_both_skills_and_dashboard_lock():
+    check_source_versions(ROOT)
 
 
 def test_sdist_requires_setup_and_all_companions(tmp_path):
