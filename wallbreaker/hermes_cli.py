@@ -128,6 +128,11 @@ def add_hermes_parser(subparsers) -> None:
         help="Resolve pending reviews in an interactive local terminal",
     )
     review.add_argument(
+        "--explain",
+        action="store_true",
+        help="Explain the recorded labels for pending reviews on a local terminal",
+    )
+    review.add_argument(
         "--delete-evidence",
         action="store_true",
         help="Delete private review evidence after strict verification",
@@ -292,7 +297,67 @@ def operator_commands(run: str | Path) -> dict:
     }
 
 
+def _explain_pending(report: dict, entries: tuple[dict, ...]) -> dict:
+    """Print why each pending attempt carries its label, with the measurements behind it.
+
+    The bodies are already readable on this terminal by the operator; only the labels and the
+    counts reach stdout, so the event stream stays free of private text.
+    """
+    from .classify import classify as classify_body
+    from .classify import garble_metrics
+
+    by_id = {entry["attempt_id"]: entry for entry in entries}
+    labels: dict[str, int] = {}
+    explained = 0
+    for repetition in report["repetitions"]:
+        attempt = repetition["attempts"][-1]
+        if attempt["status"] != "review_required":
+            continue
+        entry = by_id.get(attempt["id"], {})
+        body = str(entry.get("response", ""))
+        fires = attempt.get("fires") or []
+        behavior = (fires[0].get("behavior") if fires else None) or {}
+        label, reason = classify_body(body)
+        labels[label] = labels.get(label, 0) + 1
+        explained += 1
+        metrics = garble_metrics(body)
+        shown = ", ".join(
+            f"{key}={value:.3f}" if isinstance(value, float) else f"{key}={value}"
+            for key, value in metrics.items()
+        )
+        print(
+            f"\n[explain {attempt['id']}] expected={behavior.get('expected')} "
+            f"judge={behavior.get('judge_label')} recorded_heuristic={behavior.get('heuristic_label')}",
+            file=sys.stderr,
+        )
+        print(f"  heuristic now: {label} ({reason})", file=sys.stderr)
+        print(f"  measurements: {shown}", file=sys.stderr)
+    return {"explained": explained, "heuristic_labels": labels}
+
+
 def _review_command(args: argparse.Namespace, writer: EventWriter) -> int:
+    if args.explain:
+        if args.decisions or args.show_evidence or args.interactive or args.delete_evidence:
+            raise CampaignError(
+                "--explain cannot be combined with --set, --show-evidence, --interactive or "
+                "--delete-evidence."
+            )
+        if not sys.stdin.isatty() or not sys.stderr.isatty():
+            raise CampaignError("Private review evidence requires an interactive local terminal.")
+        report = load_campaign_report(args.run)
+        summary = _summary(report)
+        if not summary["pending_review_ids"]:
+            writer.emit("review.pending", {**summary, "private_review_count": 0})
+            code = _result_code(report)
+            writer.emit("result", {**summary, "exit_code": code})
+            return code
+        evidence = load_campaign_evidence(args.run, report)
+        entries = private_review_entries(report, evidence)
+        explained = _explain_pending(report, entries)
+        code = _result_code(report)
+        writer.emit("review.explained", {**explained, **summary})
+        writer.emit("result", {**summary, "exit_code": code})
+        return code
     if args.interactive:
         if args.decisions or args.show_evidence or args.delete_evidence:
             raise CampaignError(

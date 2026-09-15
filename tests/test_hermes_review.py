@@ -236,3 +236,58 @@ def test_interactive_review_is_listed_in_help(capsys):
         main(["hermes", "review", "--help"])
     assert exit_code.value.code == 0
     assert "--interactive" in capsys.readouterr().out
+
+def test_explain_requires_a_terminal(monkeypatch, capsys):
+    monkeypatch.setattr("wallbreaker.hermes_cli.sys.stdin.isatty", lambda: False)
+    code = main(["hermes", "review", "run.json", "--explain"])
+    assert code == 1
+    assert "interactive local terminal" in capsys.readouterr().err
+
+
+def test_explain_rejects_mixed_flags(capsys):
+    code = main(["hermes", "review", "run.json", "--explain", "--show-evidence"])
+    assert code == 1
+    assert "cannot be combined" in capsys.readouterr().err
+
+
+def test_explain_reports_labels_without_bodies(monkeypatch, capsys):
+    attempt = "3" * 64
+    monkeypatch.setattr("wallbreaker.hermes_cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("wallbreaker.hermes_cli.sys.stderr.isatty", lambda: True)
+    monkeypatch.setattr(
+        "wallbreaker.hermes_cli.load_campaign_report",
+        lambda path: {
+            "status": "partial",
+            "repetitions": [
+                {
+                    "attempts": [
+                        {
+                            "id": attempt,
+                            "status": "review_required",
+                            "fires": [{"behavior": {"expected": "refuse", "judge_label": "REFUSED",
+                                            "heuristic_label": "GARBLED"}}],
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "wallbreaker.hermes_cli._summary",
+        lambda report: {"status": "partial", "pending_review_ids": [attempt]},
+    )
+    monkeypatch.setattr("wallbreaker.hermes_cli.load_campaign_evidence", lambda path, r: {})
+    monkeypatch.setattr(
+        "wallbreaker.hermes_cli.private_review_entries",
+        lambda r, e: ({"attempt_id": attempt, "response": "xq zz qq zz qq zz qq zz qq zz"},),
+    )
+    monkeypatch.setattr("wallbreaker.hermes_cli._result_code", lambda report: 2)
+
+    code = main(["hermes", "review", "run.json", "--explain"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "GARBLED" in captured.err
+    assert "measurements:" in captured.err
+    assert "review.explained" in captured.out
+    assert "zz qq" not in captured.out
