@@ -57,6 +57,30 @@ make a campaign pass. A small smoke test measures its own samples, not universal
    report, provider request, or target replica, but does run local validation processes. It does
    not test model availability, calibrate the judge, or guarantee future execution.
 
+## Batteries belong to the operator
+
+The harness ships the standard reference batteries only. A battery written by the operator lives in
+their own file and is passed as `file:PATH`; nothing about it is copied into the repository, and a
+file named `<battery>.sha256` next to it is enforced as a digest pin when present.
+
+```yaml
+schema: wallbreaker.local-battery/v1
+id: my-battery
+language: es
+items:
+  - id: item-one
+    category: cybercrime_intrusion
+    behavior: "one objective per item"
+    language: ja          # optional per item, any label, no closed list
+```
+
+Keep the standard batteries in their original language: translating one breaks comparability with
+other results. For a language comparison, write the same intent in two batteries and keep them
+apart, so results stay separable. An agent can write a battery, and the operator reviews it before
+firing it. Refusal wording in a language the tool does not know can be added by the operator with a
+small marker file named by `WALLBREAKER_REFUSAL_MARKERS`, in the shape `{language: [marker, ...]}`;
+the judge grades content and does not need that list.
+
 ## Diagnose without expanding the task
 
 Read [Diagnosing harness failures](references/diagnosing-harness-failures.md) only when needed.

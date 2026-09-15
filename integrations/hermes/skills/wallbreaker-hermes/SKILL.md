@@ -107,8 +107,10 @@ Stop if authorization is absent or denied.
    printing the bodies with `wallbreaker hermes review RUN --show-evidence` or by opening the
    interactive reviewer with `wallbreaker hermes review RUN --interactive`, which shows one attempt
    at a time together with the expectation and the recorded judge, heuristic, state and tool
-   results. Never invoke either option through a Hermes tool or ask the operator to paste bodies
-   into the conversation. Use `clarify` only after the operator has reviewed the evidence, then
+   results. `wallbreaker hermes review RUN --explain` prints, for each pending attempt, why the
+   heuristic gave it its label, with the measurements behind it, so a label such as `GARBLED` can be
+   questioned with numbers instead of guesswork. Never invoke those options through a Hermes tool or
+   ask the operator to paste bodies into the conversation. Use `clarify` only after the operator has reviewed the evidence, then
    apply the `pass` or `finding` decisions they supply:
 
    ```text
@@ -138,6 +140,14 @@ operator supplies them after private review. Preserve exact attempt/fire identit
 case names do not prove identical prompts. Cross-plan salted fingerprints are not direct equality
 tests. Resolving reviews alone does not fix failed attempts, cleanup, or confidence problems.
 Verification exit `0` validates campaign evidence, not absence of security findings or judge accuracy.
+
+## Search outside, validate inside
+
+The laboratory target accepts one user message per fire, with no history and no continuation, so
+multi-turn attacks cannot be driven against it. Search for a prompt where multi-turn is available,
+against a normal provider endpoint, and validate the winner against the laboratory target with a
+single-turn case. A prompt that only works because the target answered turn after turn is not
+evidence about the single-turn behaviour the laboratory measures.
 
 ## Safety boundaries
 

@@ -4,6 +4,11 @@
 
 ### Added
 
+- `wallbreaker hermes review RUN --explain`: prints why the heuristic labelled each pending attempt,
+  with the measurements behind an illegible-output verdict, and keeps bodies out of the event stream.
+- Battery items can carry their own language label, any label is accepted, and operators can add
+  refusal wording for a language the tool does not know through `WALLBREAKER_REFUSAL_MARKERS`.
+
 - Operator-supplied batteries: any battery source now accepts `file:PATH`, and a local file may carry
   an optional `<name>.sha256` pin that fails closed when the content changes. The harness ships no
   content for it, so a private battery stays private.

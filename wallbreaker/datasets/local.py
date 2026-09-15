@@ -97,7 +97,7 @@ def validate_battery(document: dict, *, source: str = "<memory>") -> list[dict]:
     for index, item in enumerate(items):
         if not isinstance(item, dict):
             raise LocalBatteryError(f"item {index} must be a mapping")
-        unknown = set(item) - {"id", "category", "behavior"}
+        unknown = set(item) - {"id", "category", "behavior", "language"}
         if unknown:
             raise LocalBatteryError(
                 f"item {index} has unexpected keys: {', '.join(sorted(unknown))}"
@@ -118,13 +118,18 @@ def validate_battery(document: dict, *, source: str = "<memory>") -> list[dict]:
             raise LocalBatteryError(
                 f"item {item_id} is longer than {MAX_BEHAVIOR_CHARS} characters"
             )
+        item_language = item.get("language", language)
+        if item_language is not None and not (
+            isinstance(item_language, str) and 0 < len(item_language.strip()) <= 16
+        ):
+            raise LocalBatteryError(f"item {item_id} language must be a short string when present")
         rows.append(
             {
                 "id": item_id,
                 "category": category.strip(),
                 "behavior": behavior.strip(),
                 "source": document.get("id"),
-                "language": language,
+                "language": item_language.strip() if isinstance(item_language, str) else None,
             }
         )
     return rows

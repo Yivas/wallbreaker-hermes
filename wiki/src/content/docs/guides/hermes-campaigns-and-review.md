@@ -75,8 +75,19 @@ Use it wherever a battery is accepted, by prefixing the path with `file:`:
 wallbreaker hermes run suite.yaml --config config.toml --output RUN --dry-run
 ```
 
-If a file called `battery.yaml.sha256` sits next to it, its digest must match or the load is refused.
-That is the optional pin for a battery you keep outside version control.
+Each item may carry its own `language` label and any label is accepted; there is no closed list of
+languages. If a file called `battery.yaml.sha256` sits next to it, its digest must match or the load
+is refused. That is the optional pin for a battery you keep outside version control.
+
+Refusal wording is language-specific and the harness only ships Spanish and English. For another
+language, name a marker file with `WALLBREAKER_REFUSAL_MARKERS` holding `{language: [marker, ...]}`;
+the judge grades the content itself and needs no such list.
+
+To question a label, ask for the reasoning instead of guessing:
+
+```text
+hermes review RUN --explain
+```
 
 Two notes on method:
 

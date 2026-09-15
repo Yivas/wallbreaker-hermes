@@ -248,7 +248,15 @@ Apply decisions supplied by the operator:
 wallbreaker hermes review RUN --set ATTEMPT=pass --set ATTEMPT=finding
 ```
 
-`--interactive` is exclusive with `--set`, `--show-evidence` and `--delete-evidence`.
+`--explain` prints, for every pending attempt, the label the heuristic gives the body now, the
+reason for it and the measurements behind an illegible-output verdict, so a `GARBLED` label can be
+challenged with numbers. Only labels and counts reach stdout:
+
+```text
+wallbreaker hermes review RUN --explain
+```
+
+`--interactive` is exclusive with `--set`, `--show-evidence`, `--explain` and `--delete-evidence`.
 
 The `review.pending` event also carries `interactive_command` and `show_evidence_command`: the same
 two controls written as copy-ready commands with the absolute report path, so the operator can run
