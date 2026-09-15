@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- Operator-supplied batteries: any battery source now accepts `file:PATH`, and a local file may carry
+  an optional `<name>.sha256` pin that fails closed when the content changes. The harness ships no
+  content for it, so a private battery stays private.
+
 ### Changed
 
 - A campaign report is no longer tied to the exact package version that produced it. The producing

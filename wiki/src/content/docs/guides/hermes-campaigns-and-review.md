@@ -53,6 +53,39 @@ When a finding requires a human decision, private bodies live in a separate
 `review` without an explicit evidence display and `verify` do not reveal those bodies. Treat the
 sidecar as sensitive engagement data and account for backups when deleting it.
 
+## Your own batteries
+
+The harness ships the standard reference batteries only. Anything you write stays yours: pass a file
+and the tools treat it as one more source, with no content copied into the repository.
+
+```yaml
+schema: wallbreaker.local-battery/v1
+id: my-battery
+language: es
+items:
+  - id: cyber-one
+    category: cybercrime_intrusion
+    behavior: "one objective per item"
+```
+
+Use it wherever a battery is accepted, by prefixing the path with `file:`:
+
+```text
+/sysprompt test --source file:/path/to/battery.yaml
+wallbreaker hermes run suite.yaml --config config.toml --output RUN --dry-run
+```
+
+If a file called `battery.yaml.sha256` sits next to it, its digest must match or the load is refused.
+That is the optional pin for a battery you keep outside version control.
+
+Two notes on method:
+
+- The standard batteries stay in their original language. Translating one breaks comparability with
+  every other result; if you want a language comparison, write your own pair with the same intent in
+  both languages and keep them in separate batteries so the report separates them.
+- An agent can write a battery for you: the file is plain text and the schema above is the whole
+  contract. Review it before running it, because you are the one who answers for what it asks.
+
 ## Resolve reviews locally
 
 Run either evidence control yourself, in your own local terminal. Never invoke them through Hermes

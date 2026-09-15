@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from .advbench import AdvBenchLoader
 from .harmbench import HarmBenchLoader
 from .jbb import JBBLoader
+from .local import LocalBatteryLoader
 from .strongreject import StrongRejectLoader
 
 DATASETS = {
@@ -18,11 +21,22 @@ def sources() -> list[str]:
 
 
 def get(source: str | None = "harmbench"):
-    key = (source or "harmbench").lower()
-    loader = DATASETS.get(key)
+    """Resolve a battery source: a bundled name or a local file.
+
+    A local battery is addressed as ``file:/path/to/battery.yaml`` or by giving an existing
+    path directly. The file format and its optional digest pin are documented by
+    ``wallbreaker.datasets.local``; the harness bundles no content for it.
+    """
+    raw = source or "harmbench"
+    candidate = raw[5:] if raw.lower().startswith("file:") else raw
+    path = Path(candidate)
+    if candidate != "harmbench" and path.is_file():
+        return LocalBatteryLoader(path)
+    loader = DATASETS.get(raw.lower())
     if loader is None:
         raise KeyError(
-            f"unknown dataset '{source}'. Known sources: {', '.join(sources())}"
+            f"unknown dataset '{source}'. Known sources: {', '.join(sources())}; "
+            "a local battery can be passed as file:PATH"
         )
     return loader
 
@@ -45,6 +59,7 @@ async def battery(source: str | None = "harmbench", category=None, n: int = 8, s
 
 __all__ = [
     "DATASETS",
+    "LocalBatteryLoader",
     "sources",
     "get",
     "load",
