@@ -2,12 +2,34 @@
 
 ## Unreleased
 
+## 0.7.1 - 2026-09-16
+
 ### Fixed
 
 - Accept `GARBLED` and `EMPTY` heuristic labels when reading Hermes campaign report v2, including
   reports produced by earlier releases. Review and explanation can now load these reports;
   unresolved attempts still require human review, and verification does not mark them complete.
-  Judge labels, recorded verdicts, report schema and private evidence are unchanged.
+
+### Compatibility
+
+- Judge labels, recorded verdicts, report schema, private evidence and dependencies are unchanged.
+  Existing reports need no migration. This fixes report loading, not classifier accuracy.
+- The separate Hermes target remains pinned to `v2026.8.13`, package `0.20.1`, commit
+  `f80f453ae0679347e38abc917c7f94f717bf96c5`.
+
+### Verification
+
+- Added 11 synthetic regressions covering report loading, review, explanation, verification,
+  invalid labels and preservation of report and evidence bytes. The affected selection passed
+  320 tests with one skipped; it was not the full suite.
+
+### Upgrade
+
+```text
+python -m pip install --upgrade wallbreaker-hermes==0.7.1
+```
+
+Compare: [v0.7.0...v0.7.1](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.0...v0.7.1).
 
 ## 0.7.0 - 2026-09-16
 

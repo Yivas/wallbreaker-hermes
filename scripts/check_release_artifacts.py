@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 DISTRIBUTION = "wallbreaker-hermes"
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 WHEEL_PREFIX = f"wallbreaker_hermes-{VERSION}-"
 SDIST_NAME = f"wallbreaker_hermes-{VERSION}.tar.gz"
 HERMES_SKILLS = ("wallbreaker-hermes", "wallbreaker-campaign-setup")
