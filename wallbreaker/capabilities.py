@@ -174,7 +174,7 @@ _CATEGORY_COMMANDS: Mapping[str, frozenset[str]] = MappingProxyType({
         "/template", "/sysprompt",
     }),
     "operations": frozenset({
-        "/validate", "/replay", "/diff", "/harmbench", "/campaign", "/leaderboard",
+        "/validate", "/replay", "/diff", "/harmbench", "/battery", "/campaign", "/leaderboard",
         "/swarm", "/seedsweep", "/pairsweep", "/narrate", "/fire", "/push",
         "/adapt", "/firefile", "/leakscan", "/liberate", "/memory",
     }),
@@ -185,7 +185,7 @@ _CATEGORY_COMMANDS: Mapping[str, frozenset[str]] = MappingProxyType({
 })
 
 _BACKGROUND_COMMANDS = frozenset({
-    "/validate", "/harmbench", "/campaign", "/leaderboard", "/swarm",
+    "/validate", "/harmbench", "/battery", "/campaign", "/leaderboard", "/swarm",
     "/seedsweep", "/pairsweep", "/narrate", "/template", "/sysprompt", "/regrade",
 })
 _FOREGROUND_COMMANDS = frozenset({

@@ -150,6 +150,7 @@ HELP_TEXT = """☠ RTFM // TEH SL45H K0MM4NDZ, D00D ☠
 /adapt <seed> ;; <request> tailor an ENI/L1B3RT4S persona to the target, fire it, open a thread
 /firefile <file> ;; <req>  fire a file/seed RAW (verbatim, full-length) as the system prompt
 /harmbench [category]      standardized HarmBench behavior prompts (unbiased battery)
+/battery <src> [cat] [n]   same sampling from harmbench, jbb, strongreject or advbench
 /campaign [category] [n]   auto-escalate a battery up the technique ladder, coverage matrix
 /leaderboard [profiles..]  rank profiles by ASR on one battery (robustness benchmark)
 /swarm [@a,b] <objective>  vote/best-of: many attacker brains author + fire once, best break wins
@@ -193,12 +194,24 @@ KNOWN_COMMANDS = (
     "/help", "/edit", "/retry", "/regen", "/undo", "/clear", "/profile", "/target",
     "/provider", "/validate", "/replay", "/model", "/auto", "/autoexit", "/rounds",
     "/transforms", "/encode", "/diff", "/tools", "/preset", "/lib", "/parsel", "/eni", "/harmbench",
+    "/battery",
     "/campaign", "/leaderboard", "/swarm", "/seedsweep", "/pairsweep", "/narrate", "/fire", "/push",
     "/adapt", "/firefile", "/find", "/leakscan", "/log", "/judge", "/asr", "/stats",
     "/regrade",
     "/objective", "/template", "/sysprompt", "/findings", "/export", "/repro",
     "/report", "/session", "/resume", "/save", "/quit", "/exit",
 )
+
+
+def _battery_sources() -> list[str]:
+    """Bundled batteries the terminal can ask for.
+
+    Imported here because this module already defines text before its imports, and a second
+    module-level import would only add to that lint debt.
+    """
+    from .. import datasets
+
+    return datasets.sources()
 
 
 def suggest_command(cmd: str, known=KNOWN_COMMANDS) -> str | None:
@@ -1213,6 +1226,8 @@ class RthApp(App):
             self.run_worker(self._cmd_firefile(raw_arg), group="judge", exclusive=False)
         elif cmd == "/harmbench":
             self.run_worker(self._cmd_harmbench(rest), exclusive=False)
+        elif cmd == "/battery":
+            self.run_worker(self._cmd_battery(rest), exclusive=False)
         elif cmd == "/campaign":
             self.run_worker(self._cmd_campaign(rest), group="judge", exclusive=False)
         elif cmd == "/leaderboard":
@@ -1562,11 +1577,40 @@ class RthApp(App):
             )
         self._mount(widgets.info_panel(out.content, title="harmbench"))
 
+    async def _cmd_battery(self, rest: list[str]) -> None:
+        """/battery <source> [category] [n]
+
+        HarmBench keeps its own command; this one reaches the other bundled batteries, which the
+        sampling tool already supports but the terminal could not ask for.
+        """
+        known = _battery_sources()
+        source = rest[0].lower() if rest else ""
+        if source not in known:
+            self._mount(widgets.error_panel(
+                f"usage: /battery <{'|'.join(known)}> [category] [n]"
+            ))
+            return
+        args: dict = {"action": "sample", "source": source}
+        rest = rest[1:]
+        if rest and rest[0].isdigit():
+            args["n"] = int(rest[0])
+        elif rest:
+            args["category"] = rest[0]
+            if len(rest) > 1 and rest[1].isdigit():
+                args["n"] = int(rest[1])
+        out = await self.registry.execute("harmbench", args)
+        panel = widgets.error_panel(out.content) if out.is_error else widgets.info_panel(
+            out.content, title=source
+        )
+        self._mount(panel)
+
     async def _cmd_campaign(self, rest: list[str]) -> None:
         args: dict = {}
         for tok in rest:
             if tok.isdigit():
                 args["n"] = int(tok)
+            elif tok.lower() in _battery_sources():
+                args["source"] = tok.lower()
             else:
                 args["category"] = tok
         self._mount(widgets.info_panel(
@@ -1588,8 +1632,11 @@ class RthApp(App):
             ))
             return
         args: dict = {}
-        profiles = [t for t in rest if not t.isdigit()]
+        profiles = [t for t in rest if not t.isdigit() and t.lower() not in _battery_sources()]
         nums = [int(t) for t in rest if t.isdigit()]
+        sources = [t.lower() for t in rest if t.lower() in _battery_sources()]
+        if sources:
+            args["source"] = sources[0]
         if profiles:
             args["targets"] = profiles
         if nums:

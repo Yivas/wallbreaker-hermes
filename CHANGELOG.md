@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- The interactive terminal can now reach every bundled battery. `/battery SOURCE [category] [n]`
+  samples `harmbench`, `jbb`, `strongreject` or `advbench`, and `/campaign` and `/leaderboard`
+  accept a battery name as well. HarmBench keeps its own command and stays the default, so nothing
+  that worked before changes.
+
 ## 0.7.3 - 2026-09-16
 
 ### Fixed

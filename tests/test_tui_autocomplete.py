@@ -265,3 +265,70 @@ def test_session_picker_empty_reports_error():
                 os.chdir(cwd)
 
     asyncio.run(run())
+
+
+def test_battery_command_targets_the_requested_bundle():
+    from wallbreaker.tui.app import RthApp
+
+    calls = []
+
+    class FakeRegistry:
+        async def execute(self, name, args):
+            calls.append((name, dict(args)))
+
+            class Out:
+                content = "ok"
+                is_error = False
+
+            return Out()
+
+    def mount(widget):
+        return widget
+
+    class Harness:
+        registry = FakeRegistry()
+        _mount = staticmethod(mount)
+
+    asyncio.run(RthApp._cmd_battery(Harness(), ["jbb", "Fraud/Deception", "3"]))
+    assert calls == [("harmbench", {"action": "sample", "source": "jbb", "category": "Fraud/Deception", "n": 3})]
+
+    calls.clear()
+    asyncio.run(RthApp._cmd_battery(Harness(), ["strongreject"]))
+    assert calls == [("harmbench", {"action": "sample", "source": "strongreject"})]
+
+    calls.clear()
+    asyncio.run(RthApp._cmd_battery(Harness(), ["not-a-battery"]))
+    assert calls == []
+
+
+def test_campaign_and_leaderboard_accept_a_battery_source():
+    from wallbreaker.tui.app import RthApp
+
+    calls = []
+
+    class FakeRegistry:
+        async def execute(self, name, args):
+            calls.append((name, dict(args)))
+
+            class Out:
+                content = "ok"
+                is_error = False
+
+            return Out()
+
+    class Cfg:
+        target = None
+        profiles = {"a": object(), "b": object()}
+
+    class Harness:
+        registry = FakeRegistry()
+        config = Cfg()
+        _mount = staticmethod(lambda widget: widget)
+        _refresh_status = staticmethod(lambda: None)
+
+    asyncio.run(RthApp._cmd_campaign(Harness(), ["jbb", "Fraud/Deception", "4"]))
+    assert calls == [("campaign", {"n": 4, "source": "jbb", "category": "Fraud/Deception"})]
+
+    calls.clear()
+    asyncio.run(RthApp._cmd_leaderboard(Harness(), ["advbench", "a", "b", "5"]))
+    assert calls == [("leaderboard", {"targets": ["a", "b"], "n": 5, "source": "advbench"})]
