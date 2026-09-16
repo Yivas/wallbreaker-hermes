@@ -1324,7 +1324,10 @@ async def _run_repetition(
     automatic = _combine_assessments(
         Assessment(fire["assessment"]) for fire in fires
     )
-    if result.status != "finished" or fire_limit_reached or unverified_invocation:
+    # Exhausting the fire budget means the attacker stopped early, not that the fires it did
+    # record are inconclusive: each one is assessed on its own evidence, and a clean shot stays a
+    # clean shot. Only an unfinished run or an unverified invocation can void that verdict.
+    if result.status != "finished" or unverified_invocation:
         return result.status, Assessment.MANUAL_REQUIRED, fires
     return result.status, automatic, fires
 
@@ -2064,7 +2067,6 @@ def validate_campaign_report(report: dict) -> dict:
                     Assessment.MANUAL_REQUIRED
                     if computed_attempt == Assessment.MANUAL_REQUIRED
                     or attempt["autonomous_status"] != "finished"
-                    or attempt["limit_reached"]
                     or has_non_success
                     else computed_attempt
                 )

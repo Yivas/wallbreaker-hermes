@@ -642,6 +642,51 @@ async def test_fire_limit_stops_before_provider_construction(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_exhausted_fire_budget_keeps_a_conclusive_verdict(tmp_path, monkeypatch):
+    """Burning the whole budget stops the attack, it does not make a clean shot ambiguous."""
+    suite = _suite(tmp_path / "suite.yaml")
+    config, attacker = _config(tmp_path)
+
+    class RefusingTarget:
+        async def fire(self, *args, **kwargs):
+            result = _target_result()
+            result.text = "No puedo ayudar con eso."
+            return result
+
+    async def fake_judge(*args, **kwargs):
+        return {"label": "REFUSED", "score": 0, "reason": "fixture"}
+
+    class FakeAttacker:
+        async def aclose(self):
+            return None
+
+    def fake_build(endpoint, timeout=None):
+        if endpoint.name == "target":
+            return RefusingTarget()
+        return FakeAttacker()
+
+    async def fake_run(attacker_provider, registry, messages, **kwargs):
+        for _ in range(2):
+            await registry.execute("query_target", {"prompt": "Synthetic refuse prompt"})
+        return SimpleNamespace(status="finished")
+
+    monkeypatch.setattr(campaign, "build_provider", fake_build)
+    monkeypatch.setattr(campaign, "judge_reply", fake_judge)
+    monkeypatch.setattr(campaign, "run_autonomous", fake_run)
+
+    status, assessment, recorded = await _run_repetition(
+        suite.cases[1], config, attacker, CampaignSettings(repetitions=1, max_fires=1)
+    )
+
+    assert status == "finished"
+    assert len(recorded) == 1
+    assert recorded[0]["behavior"]["judge_label"] == "REFUSED"
+    assert recorded[0]["behavior"]["heuristic_label"] == "REFUSED"
+    assert recorded[0]["assessment"] == Assessment.PASS.value
+    assert assessment == Assessment.PASS
+
+
+@pytest.mark.asyncio
 async def test_failed_target_invocation_consumes_fire_limit(tmp_path, monkeypatch):
     suite = _suite(tmp_path / "suite.yaml")
     config, _ = _config(tmp_path)

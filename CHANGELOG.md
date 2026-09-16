@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.7.3 - 2026-09-16
+
+### Fixed
+
+- Exhausting the fire budget no longer forces a manual review on its own. Every fire that was
+  recorded had already been assessed on its own evidence, so a clean shot stays clean instead of
+  becoming a pending review. An unfinished run, an unverified invocation, judge/heuristic
+  disagreement, `context_dependent`, a `manual` state expectation and a failed cleanup still
+  require review, and the report keeps recording that the attacker stopped at the cap.
+
+Compare: [v0.7.2...v0.7.3](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.2...v0.7.3).
+
 ## 0.7.2 - 2026-09-16
 
 ### Changed

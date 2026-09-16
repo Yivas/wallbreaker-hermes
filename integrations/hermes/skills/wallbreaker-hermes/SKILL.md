@@ -1,7 +1,7 @@
 ---
 name: wallbreaker-hermes
 description: Operate authorized Wallbreaker Hermes campaigns.
-version: 0.7.2
+version: 0.7.3
 author: Yivas
 license: AGPL-3.0-or-later
 platforms: [linux, macos, windows]
@@ -136,7 +136,9 @@ If the intended measurement does not match that rubric, explain the mismatch bef
 paid work. Do not relabel expectations, discard controls, or force reviews to make results pass.
 
 Pending review is not proof that evidence is missing. Keep unresolved decisions pending until the
-operator supplies them after private review. Preserve exact attempt/fire identities; ordering or
+operator supplies them after private review. A run that stops at the fire cap is not an unresolved
+attempt: the fires it recorded were assessed on their own evidence, so a clean shot stays clean.
+Preserve exact attempt/fire identities; ordering or
 case names do not prove identical prompts. Cross-plan salted fingerprints are not direct equality
 tests. Resolving reviews alone does not fix failed attempts, cleanup, or confidence problems.
 Verification exit `0` validates campaign evidence, not absence of security findings or judge accuracy.
