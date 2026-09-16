@@ -8,6 +8,8 @@ a machine, or point at an operator battery with ``file:PATH``.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import inspect
 import json
 import sys
 
@@ -38,6 +40,22 @@ def add_battery_parser(subparsers) -> None:
     parser.add_argument("--json", action="store_true", help="Print a JSON object instead of a list")
 
 
+def ensure_battery(loader) -> str | None:
+    """Fetch a battery if its loader needs it.
+
+    Bundled loaders expose an awaitable ``ensure``; the local loader has none. Getting this wrong
+    silently returns a coroutine and the sample comes back empty, so both cases are handled here for
+    every command that reads a battery.
+    """
+    ensure = getattr(loader, "ensure", None)
+    if ensure is None:
+        return None
+    outcome = ensure()
+    if inspect.isawaitable(outcome):
+        outcome = asyncio.run(outcome)
+    return outcome
+
+
 def _payload(source: str, category: str | None, rows: list[dict]) -> dict:
     return {
         "schema": "wallbreaker.battery-sample/v1",
@@ -65,12 +83,10 @@ def run_battery_cli(args) -> int:
         print(str(exc).strip("'"), file=sys.stderr)
         return 2
 
-    ensure = getattr(loader, "ensure", None)
-    if ensure is not None:
-        error = ensure()
-        if error:
-            print(f"Error: {error}", file=sys.stderr)
-            return 1
+    error = ensure_battery(loader)
+    if error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
 
     try:
         rows = loader.sample(args.category, args.n, args.seed)

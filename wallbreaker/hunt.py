@@ -159,8 +159,10 @@ def plan_hunt(args, config) -> HuntPlan:
 
 
 def _load_behaviors(plan: HuntPlan) -> list[dict]:
+    from .battery_cli import ensure_battery
+
     loader = datasets.get(plan.battery)
-    error = loader.ensure()
+    error = ensure_battery(loader)
     if error:
         raise RuntimeError(error)
     rows = loader.sample(plan.category, plan.items, plan.seed)

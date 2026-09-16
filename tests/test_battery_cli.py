@@ -11,12 +11,14 @@ from wallbreaker.datasets.local import LocalBatteryLoader
 
 
 class _FakeLoader:
+    """Bundled loaders fetch asynchronously; the fake mirrors that so the bug cannot come back."""
+
     def __init__(self, rows, error=None):
         self._rows = rows
         self._error = error
         self.ensured = 0
 
-    def ensure(self):
+    async def ensure(self):
         self.ensured += 1
         return self._error
 
@@ -90,6 +92,27 @@ def test_download_failure_is_reported(monkeypatch, capsys, rows):
 
     assert battery_cli.run_battery_cli(_args()) == 1
     assert "HTTP 503" in capsys.readouterr().err
+
+
+class _SyncLoader(_FakeLoader):
+    """The local loader has no ensure at all."""
+
+    ensure = None
+
+
+def test_async_loader_is_awaited(monkeypatch, capsys, rows):
+    monkeypatch.setattr(battery_cli.datasets, "get", lambda source: _FakeLoader(rows))
+
+    assert battery_cli.run_battery_cli(_args()) == 0
+    out = capsys.readouterr().out
+    assert "First behavior" in out, "an un-awaited ensure() would leave the sample empty"
+
+
+def test_loader_without_ensure_works(monkeypatch, capsys, rows):
+    monkeypatch.setattr(battery_cli.datasets, "get", lambda source: _SyncLoader(rows))
+
+    assert battery_cli.run_battery_cli(_args()) == 0
+    assert "First behavior" in capsys.readouterr().out
 
 
 def test_operator_battery_needs_no_network(tmp_path, capsys):
