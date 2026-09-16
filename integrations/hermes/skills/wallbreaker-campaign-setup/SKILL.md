@@ -1,7 +1,7 @@
 ---
 name: wallbreaker-campaign-setup
 description: Prepare Wallbreaker Hermes campaign artifacts.
-version: 0.7.5
+version: 0.7.6
 author: Yivas
 license: AGPL-3.0-or-later
 platforms: [linux, macos, windows]

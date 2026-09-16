@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.7.6 - 2026-09-16
+
+### Fixed
+
+- `wallbreaker battery` and `wallbreaker hunt` now wait for bundled batteries to download. The
+  bundled loaders fetch asynchronously and both commands called them as if they were immediate, so
+  a fresh machine got an empty sample instead of behaviors. Operator batteries, which need no
+  download, were unaffected.
+
+Compare: [v0.7.5...v0.7.6](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.5...v0.7.6).
+
 ## 0.7.5 - 2026-09-16
 
 ### Added
