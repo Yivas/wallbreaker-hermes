@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- `wallbreaker battery SOURCE [--category CATEGORY] [--n N] [--json]` lists or samples any bundled
+  battery (`harmbench`, `jbb`, `strongreject`, `advbench`, or `file:PATH`) without opening the
+  interactive terminal.
+- `wallbreaker hunt --battery SOURCE --items N --rounds R --output RUN.jsonl` sweeps a battery
+  against the configured target. It prints a plan and a token first, refuses to run without
+  `--authorized --confirm TOKEN`, requires explicit limits, and writes verdicts, counts and
+  fingerprints instead of prompts and responses. `--include-bodies` adds the bodies and warns that
+  the file becomes sensitive.
+
 ## 0.7.4 - 2026-09-16
 
 ### Added

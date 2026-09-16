@@ -183,7 +183,7 @@ def _add_endpoint_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--api-key", help="API key literal (prefer --api-key-env)")
 
 
-SUBCOMMANDS = ("lib", "parsel", "eni", "transform", "findings", "report", "export", "check", "regrade", "baseline", "dashboard", "hermes")
+SUBCOMMANDS = ("lib", "parsel", "eni", "transform", "findings", "report", "export", "check", "regrade", "baseline", "dashboard", "hermes", "battery", "hunt")
 
 
 def build_main_parser() -> argparse.ArgumentParser:
@@ -253,9 +253,13 @@ def build_sub_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wallbreaker")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    from .battery_cli import add_battery_parser
     from .hermes_cli import add_hermes_parser
+    from .hunt import add_hunt_parser
 
     add_hermes_parser(sub)
+    add_battery_parser(sub)
+    add_hunt_parser(sub)
     lib = sub.add_parser("lib", help="Manage the L1B3RT4S jailbreak library")
     lib.add_argument("lib_action", choices=["update", "list", "path"])
 
@@ -426,6 +430,14 @@ def main(argv: list[str] | None = None) -> int:
             from .hermes_cli import run_hermes_cli
 
             return run_hermes_cli(args)
+        if args.command == "battery":
+            from .battery_cli import run_battery_cli
+
+            return run_battery_cli(args)
+        if args.command == "hunt":
+            from .hunt import run_hunt_cli
+
+            return run_hunt_cli(args)
         load_dotenv()
         if args.command == "transform":
             from .tools.parseltongue import run_chain_cli

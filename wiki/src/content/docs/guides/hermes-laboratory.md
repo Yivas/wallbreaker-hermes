@@ -41,22 +41,22 @@ The replica accepts one text turn per fire, so a multi-turn attack cannot be dri
 Search where multi-turn is available, against a normal provider endpoint, then carry the winner
 into a single-turn case.
 
-Search in the interactive terminal of the same package:
+Search from a plain command line: list or sample a battery, then sweep it. This is also the path a
+coordinating agent uses, because it cannot drive the interactive terminal.
 
 ```text
-wallbreaker                       open the interactive terminal
-/sysprompt set <text>             hold one fixed system prompt
-/sysprompt load <file|seed>       or load a raw persona
-/sysprompt test [prefill] [samples=N]
-/validate [task]                  re-fire eight samples for the real success rate
-/swarm siege [@a,b] <objective>   collaborative multi-round escalation
+wallbreaker battery harmbench --category cybercrime_intrusion --n 5
+wallbreaker battery jbb --json
+wallbreaker hunt --battery strongreject --items 5 --rounds 8 --output RUN.jsonl --dry-run
 ```
 
-Or run the autonomous loop without a terminal:
+`hunt` prints the plan and a token without spending anything. Rerun the identical command with
+`--authorized --confirm TOKEN` to execute it. Limits are mandatory: items and rounds have no
+hidden default, and cost grows with items x rounds x models.
 
-```text
-wallbreaker --system PROMPT --auto --rounds ROUNDS "OBJECTIVE"
-```
+The batteries are `harmbench`, `jbb`, `strongreject` and `advbench`; an operator battery is
+addressed as `file:PATH`. The result file holds verdicts, counts and fingerprints. Prompts and
+responses are written only with `--include-bodies`, and then the file is sensitive material.
 
 Validation belongs to the laboratory, one turn at a time:
 
@@ -70,6 +70,9 @@ wallbreaker hermes verify RUN
 A rate measured with history is a search result, not laboratory evidence. The number that
 matters here comes from the single-turn case, and `--resume` reopens a campaign checkpoint; it
 does not turn the replica into a continued conversation.
+
+The interactive terminal keeps the manual workflow (`/sysprompt`, `/swarm`, `/validate`), but a
+coordinating agent uses the commands above instead.
 
 ## Preflight
 
