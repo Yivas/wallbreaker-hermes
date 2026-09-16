@@ -1050,6 +1050,96 @@ def test_manual_review_cannot_clear_confirmed_finding(tmp_path):
         campaign.apply_reviews(path, {attempt["id"]: Assessment.PASS})
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("response,label", [("", "EMPTY"), ("zz " * 20, "GARBLED")])
+@pytest.mark.parametrize("producing_version", ["0.3.1", "0.6.1", "0.7.0"])
+async def test_unresolved_heuristic_round_trips_without_auto_review(
+    tmp_path, monkeypatch, capsys, response, label, producing_version
+):
+    from wallbreaker.cli import main
+    from wallbreaker.hermes_review import load_pending
+
+    def unexpected_provider(*args, **kwargs):
+        pytest.fail("Reading synthetic reports must not construct a provider")
+
+    monkeypatch.setattr(campaign, "build_provider", unexpected_provider)
+    report = _complete_report(tmp_path)
+    report["versions"]["wallbreaker"] = producing_version
+    case = _suite(tmp_path / "suite.yaml").cases[0]
+    fire = await campaign._evaluate_fire(
+        case, "Synthetic prompt", response, _target_result(), None,
+        fingerprint_salt=report["fingerprint_salt"],
+    )
+    fire["response_transform"] = {"status": "not_requested", "error_type": None}
+    assert fire["behavior"]["heuristic_label"] == label
+    assert fire["behavior"]["assessment"] == Assessment.MANUAL_REQUIRED.value
+    attempt = report["repetitions"][0]["attempts"][-1]
+    attempt.update(
+        fires=[fire], status=AttemptStatus.REVIEW_REQUIRED.value,
+        assessment=Assessment.MANUAL_REQUIRED.value,
+        automatic_assessment=Assessment.MANUAL_REQUIRED.value,
+    )
+    _refresh(report)
+    path = tmp_path / "unresolved-report.json"
+    _write_report_with_evidence(path, report)
+    original_report = path.read_bytes()
+    original_evidence = campaign_evidence_path(path).read_bytes()
+
+    loaded = load_campaign_report(path)
+    assert loaded == report
+    assert "review_pending" in campaign_verification_issues(loaded)
+    pending, entries, signals = load_pending(path)
+    assert pending == [attempt["id"]]
+    assert entries[attempt["id"]]["attempt_id"] == attempt["id"]
+    assert signals[attempt["id"]]["heuristic"] == label
+
+    monkeypatch.setattr("wallbreaker.hermes_cli.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("wallbreaker.hermes_cli.sys.stderr.isatty", lambda: True)
+    for action, flags, expected_event in (
+        ("review", [], "review.pending"),
+        ("review", ["--explain"], "review.explained"),
+        ("verify", [], "verify.finished"),
+    ):
+        assert main(["hermes", action, str(path), *flags]) == 2
+        captured = capsys.readouterr()
+        events = [json.loads(line) for line in captured.out.splitlines() if line.strip()]
+        data = next(event["data"] for event in events if event["event"] == expected_event)
+        if action == "verify":
+            assert "review_pending" in data["issues"]
+        else:
+            assert data["pending_review_ids"] == [attempt["id"]]
+        if flags:
+            assert f"recorded_heuristic={label}" in captured.err
+            assert data["explained"] == 1
+        for output in (captured.out, captured.err):
+            assert "Synthetic response" not in output
+            assert "Synthetic prompt" not in output
+            assert "Synthetic objective" not in output
+        assert path.read_bytes() == original_report
+        assert campaign_evidence_path(path).read_bytes() == original_evidence
+
+
+@pytest.mark.parametrize("label", ["GARBLED", "EMPTY"])
+def test_unresolved_heuristic_cannot_be_forged_into_automatic_pass(tmp_path, label):
+    report = _complete_report(tmp_path)
+    report["repetitions"][0]["attempts"][-1]["fires"][0]["behavior"][
+        "heuristic_label"
+    ] = label
+    with pytest.raises(CampaignError, match="invalid"):
+        validate_campaign_report(report)
+
+
+@pytest.mark.parametrize(
+    "field,label",
+    [("heuristic_label", "UNKNOWN"), ("judge_label", "GARBLED"), ("judge_label", "EMPTY")],
+)
+def test_report_rejects_labels_outside_each_evaluator_contract(tmp_path, field, label):
+    report = _complete_report(tmp_path)
+    report["repetitions"][0]["attempts"][-1]["fires"][0]["behavior"][field] = label
+    with pytest.raises(CampaignError, match="invalid"):
+        validate_campaign_report(report)
+
+
 def test_pending_review_is_structurally_valid_but_not_verified(tmp_path):
     report = _complete_report(tmp_path)
     attempt = report["repetitions"][0]["attempts"][-1]

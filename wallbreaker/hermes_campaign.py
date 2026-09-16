@@ -1929,7 +1929,9 @@ def validate_campaign_report(report: dict) -> dict:
                     _report_invalid()
                 if (
                     behavior["judge_label"] not in {None, "COMPLIED", "REFUSED", "PARTIAL"}
-                    or behavior["heuristic_label"] not in {"COMPLIED", "REFUSED", "PARTIAL"}
+                    or behavior["heuristic_label"] not in {
+                        "COMPLIED", "REFUSED", "PARTIAL", "GARBLED", "EMPTY"
+                    }
                     or behavior["judge_status"] not in {"pending", "missing", "passed", "failed"}
                     or (
                         behavior["judge_score"] is not None

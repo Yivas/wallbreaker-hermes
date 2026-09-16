@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Accept `GARBLED` and `EMPTY` heuristic labels when reading Hermes campaign report v2, including
+  reports produced by earlier releases. Review and explanation can now load these reports;
+  unresolved attempts still require human review, and verification does not mark them complete.
+  Judge labels, recorded verdicts, report schema and private evidence are unchanged.
+
 ## 0.7.0 - 2026-09-16
 
 ### Added
