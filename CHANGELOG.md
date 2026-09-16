@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.5 - 2026-09-16
+
 ### Added
 
 - `wallbreaker battery SOURCE [--category CATEGORY] [--n N] [--json]` lists or samples any bundled
@@ -12,6 +14,8 @@
   `--authorized --confirm TOKEN`, requires explicit limits, and writes verdicts, counts and
   fingerprints instead of prompts and responses. `--include-bodies` adds the bodies and warns that
   the file becomes sensitive.
+
+Compare: [v0.7.4...v0.7.5](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.4...v0.7.5).
 
 ## 0.7.4 - 2026-09-16
 
