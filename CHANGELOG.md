@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.7.2 - 2026-09-16
+
+### Changed
+
+- The operator skill and the laboratory guide state the search/validation split with the commands
+  that exist: `/sysprompt set`, `/sysprompt load`, `/sysprompt test`, `/validate` and `/swarm siege`
+  in the interactive terminal, `--system --auto --rounds` in one-shot mode, and
+  `wallbreaker hermes run`, `review` and `verify` for the single-turn validation. A rate measured
+  with history is a search result, not laboratory evidence.
+
+Compare: [v0.7.1...v0.7.2](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.1...v0.7.2).
+
 ## 0.7.1 - 2026-09-16
 
 ### Fixed

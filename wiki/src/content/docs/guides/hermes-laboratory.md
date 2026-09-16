@@ -35,6 +35,42 @@ The child process keeps the operating-system permissions of the account that lau
 laboratory does not restrict filesystem or network access at the operating-system level. Run it
 under a separate account, container or virtual machine when the target requires stronger isolation.
 
+## Search outside, validate inside
+
+The replica accepts one text turn per fire, so a multi-turn attack cannot be driven against it.
+Search where multi-turn is available, against a normal provider endpoint, then carry the winner
+into a single-turn case.
+
+Search in the interactive terminal of the same package:
+
+```text
+wallbreaker                       open the interactive terminal
+/sysprompt set <text>             hold one fixed system prompt
+/sysprompt load <file|seed>       or load a raw persona
+/sysprompt test [prefill] [samples=N]
+/validate [task]                  re-fire eight samples for the real success rate
+/swarm siege [@a,b] <objective>   collaborative multi-round escalation
+```
+
+Or run the autonomous loop without a terminal:
+
+```text
+wallbreaker --system PROMPT --auto --rounds ROUNDS "OBJECTIVE"
+```
+
+Validation belongs to the laboratory, one turn at a time:
+
+```text
+wallbreaker hermes run SUITE --config CONFIG --output RUN --dry-run
+wallbreaker hermes run SUITE --config CONFIG --output RUN --authorized --confirm TOKEN
+wallbreaker hermes review RUN
+wallbreaker hermes verify RUN
+```
+
+A rate measured with history is a search result, not laboratory evidence. The number that
+matters here comes from the single-turn case, and `--resume` reopens a campaign checkpoint; it
+does not turn the replica into a continued conversation.
+
 ## Preflight
 
 The preflight resolves the target checkout, interpreter, Hermes baseline, manifest and provider

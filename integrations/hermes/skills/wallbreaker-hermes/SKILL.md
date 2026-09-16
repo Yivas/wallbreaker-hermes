@@ -1,7 +1,7 @@
 ---
 name: wallbreaker-hermes
 description: Operate authorized Wallbreaker Hermes campaigns.
-version: 0.7.1
+version: 0.7.2
 author: Yivas
 license: AGPL-3.0-or-later
 platforms: [linux, macos, windows]
@@ -148,6 +148,39 @@ multi-turn attacks cannot be driven against it. Search for a prompt where multi-
 against a normal provider endpoint, and validate the winner against the laboratory target with a
 single-turn case. A prompt that only works because the target answered turn after turn is not
 evidence about the single-turn behaviour the laboratory measures.
+
+Both halves use the installed Wallbreaker package, on different surfaces:
+
+1. **Search**, where multi-turn is available, against a normal provider endpoint. The interactive
+   terminal holds one fixed system prompt and measures it:
+
+   ```text
+   wallbreaker                       open the interactive terminal
+   /sysprompt set <text>             hold one fixed system prompt
+   /sysprompt load <file|seed>       or load a raw persona
+   /sysprompt test [prefill] [samples=N]
+   /validate [task]                  re-fire eight samples for the real success rate
+   /swarm siege [@a,b] <objective>   collaborative multi-round escalation
+   ```
+
+   One-shot mode runs the same autonomous loop without a terminal:
+
+   ```text
+   wallbreaker --system PROMPT --auto --rounds ROUNDS "OBJECTIVE"
+   ```
+
+2. **Validate**, single turn, against the fixed Hermes laboratory target:
+
+   ```text
+   wallbreaker hermes run SUITE --config CONFIG --output RUN --dry-run
+   ```
+
+   Approve that exact plan and rerun it with `--authorized --confirm TOKEN`, then review and verify
+   as described above.
+
+Keep the two halves apart when reporting. A rate measured with history is a search result, not
+laboratory evidence, and the laboratory covers one text turn per fire. Carrying the winning prompt
+into a single-turn case is what turns a search result into evidence.
 
 ## Safety boundaries
 
