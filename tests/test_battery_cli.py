@@ -135,3 +135,23 @@ def test_operator_battery_needs_no_network(tmp_path, capsys):
 
     assert battery_cli.run_battery_cli(_args(source=f"file:{path}", n=2)) == 0
     assert "Synthetic one" in capsys.readouterr().out
+
+
+def test_cache_directory_survives_a_read_only_installation(tmp_path, monkeypatch):
+    """A protected installation must still download: the cache moves to the user profile."""
+    from wallbreaker.datasets import _common
+
+    monkeypatch.delenv(_common.LIBRARY_DIR_ENV, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(_common.os, "access", lambda path, mode: False)
+
+    resolved = _common.library_dir()
+    assert resolved == tmp_path / "wallbreaker-hermes" / "library"
+    assert resolved.is_relative_to(tmp_path)
+
+
+def test_explicit_cache_directory_wins(tmp_path, monkeypatch):
+    from wallbreaker.datasets import _common
+
+    monkeypatch.setenv(_common.LIBRARY_DIR_ENV, str(tmp_path / "custom"))
+    assert _common.library_dir() == tmp_path / "custom"

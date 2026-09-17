@@ -4,6 +4,7 @@ import asyncio
 import csv
 import hashlib
 import io
+import os
 import random
 from pathlib import Path
 
@@ -11,9 +12,35 @@ import httpx
 
 from .._fsutil import atomic_write_bytes
 
+LIBRARY_DIR_ENV = "WALLBREAKER_LIBRARY_DIR"
+
 
 def library_dir() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "library"
+    """Where downloaded batteries and libraries are cached.
+
+    A checkout is writable, so it keeps using its own ``library/``. A protected installation is
+    not: the Windows ACL on the runtime leaves the account read-only inside the package, which
+    turned a download into ``WinError 5``. An explicit directory wins, then a writable package
+    directory, and otherwise the per-user data directory, which is always writable for the account
+    running the command.
+    """
+    configured = os.environ.get(LIBRARY_DIR_ENV)
+    if configured:
+        return Path(configured)
+    packaged = Path(__file__).resolve().parent.parent.parent / "library"
+    if os.access(packaged if packaged.exists() else packaged.parent, os.W_OK):
+        return packaged
+    return Path(user_data_dir()) / "library"
+
+
+def user_data_dir() -> str:
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if base:
+            return str(Path(base) / "wallbreaker-hermes")
+    xdg = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+    return str(base / "wallbreaker-hermes")
 
 
 def cache_path(filename: str) -> Path:
