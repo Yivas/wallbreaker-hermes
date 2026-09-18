@@ -4,7 +4,17 @@ from ..config import Config
 from .registry import Tool, ToolContext, ToolRegistry
 
 
-def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
+# The tools that actually attack or grade: fire, keep the thread, transform, mutate, judge, look
+# for a seed. Mounting the full registry instead puts ~80 tool schemas in the attacker's system
+# prompt, which costs tens of thousands of tokens per round and blurs the model's focus.
+CORE_ATTACK_TOOLS = (
+    "target", "multi_fire", "diff_fire", "prefill", "narrate", "pair", "mutate",
+    "parseltongue", "parsel_engine", "judge", "judge_selftest", "recommend",
+    "recommend_next", "leak_scan", "session_card", "strategy_attack",
+)
+
+
+def build_registry(config: Config, cwd: str | None = None, tools: str = "all") -> ToolRegistry:
     judge_endpoint = config.judge if getattr(config, "judge_enabled", True) else None
     if judge_endpoint is None and getattr(config, "judge_enabled", True):
         try:
@@ -15,6 +25,16 @@ def build_registry(config: Config, cwd: str | None = None) -> ToolRegistry:
     registry = ToolRegistry(ctx)
 
     from . import control, files, shell
+
+    if tools == "core":
+        for module_name in CORE_ATTACK_TOOLS:
+            try:
+                module = __import__(f"{__name__}.{module_name}", fromlist=["register"])
+            except ImportError:
+                continue
+            module.register(registry)
+        control.register(registry)
+        return registry
 
     shell.register(registry)
     files.register(registry)

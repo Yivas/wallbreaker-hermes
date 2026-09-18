@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .. import _paths
+
 from .registry import ToolContext, ToolRegistry
 
 MAX_GET = 40000
@@ -31,7 +33,7 @@ _VENDOR_HINTS = (
 
 
 def library_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "library" / "system_prompts"
+    return _paths.library_dir() / "system_prompts"
 
 
 def is_present() -> bool:

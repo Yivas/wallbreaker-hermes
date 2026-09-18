@@ -28,6 +28,8 @@ import asyncio
 import subprocess
 import sys
 from pathlib import Path
+
+from .. import _paths
 from typing import Any
 
 from .registry import ToolContext, ToolRegistry
@@ -571,7 +573,7 @@ def load_corpus_with_pin_check(
         )
 
     if corpus_path is None:
-        root = Path(__file__).resolve().parents[2] / "library"
+        root = _paths.library_dir()
         corpus_path = root / corpus_name
     actual = local_corpus_sha(corpus_path)
     if not verify_corpus_sha(pinned=sha, actual=actual):

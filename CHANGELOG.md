@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 0.7.13 - 2026-09-18
+
+### Added
+
+- `--system-file PATH` reads the system prompt from a file, so a long persona no longer has to go
+  through the command line.
+- `--tools {all,core}` chooses the tool set for one-shot mode. `core` mounts twenty attack tools
+  instead of a hundred: the full registry puts about eighty tool schemas in the attacker's system
+  prompt, which costs tens of thousands of input tokens per round and blurs a model that is being
+  asked to attack.
+
+### Fixed
+
+- Every catalogue now resolves its cache through the shared path resolver (L1B3RT4S, ENI,
+  PARS3LT0NGV3, system prompts, the transform library and the CLI's own library root). On a
+  read-only installation they can be downloaded again; before, they always tried to write inside
+  the package.
+
+### Known
+
+- Cloning the L1B3RT4S corpus fails on Windows: upstream ships a file named `*SPECIAL_TOKENS.json`
+  and the `*` is not a legal filename character there. The clone succeeds and the checkout does not.
+  Use your own persona file with `--system-file`, or fetch that corpus on a filesystem that accepts
+  the name.
+
+Compare: [v0.7.12...v0.7.13](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.12...v0.7.13).
+
 ## 0.7.12 - 2026-09-18
 
 ### Changed

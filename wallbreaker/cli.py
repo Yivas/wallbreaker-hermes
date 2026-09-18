@@ -131,7 +131,9 @@ def _run_corpus_verify(args) -> int:
     # loaders will actually execute/read; merely having a non-UNRESOLVED string in the
     # lock file is not proof of integrity.
     from .tools.parsel_engine import local_corpus_sha
-    library_root = Path(__file__).resolve().parent.parent / "library"
+    from ._paths import library_dir as _library_dir
+
+    library_root = _library_dir()
     for name, entry in corpora.items():
         sha = entry.get("sha", "UNRESOLVED")
         if sha == "UNRESOLVED":
@@ -200,6 +202,16 @@ def build_main_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--system", help="System prompt override for this session"
+    )
+    parser.add_argument(
+        "--system-file",
+        help="Read the system prompt from a file, e.g. a persona from the L1B3RT4S or ENI library",
+    )
+    parser.add_argument(
+        "--tools",
+        choices=("all", "core"),
+        default="all",
+        help="Tool set for one-shot mode: every tool, or the attack core (20 tools instead of 100)",
     )
     parser.add_argument(
         "--auto", action="store_true", help="Run autonomously until finish/ask_operator"
@@ -341,7 +353,16 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
 
     endpoint = resolve_endpoint(config, args)
     provider = build_provider(endpoint)
-    registry = None if args.no_tools else build_registry(config)
+    system_override = args.system
+    if getattr(args, "system_file", None):
+        # A persona file is large and multi-line; reading it here keeps it out of the command line
+        # and out of the shell history.
+        try:
+            system_override = Path(args.system_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"[system-file error] {exc}", file=sys.stderr)
+            return 1
+    registry = None if args.no_tools else build_registry(config, tools=args.tools)
     runlog = RunLog()
     runlog.enabled = getattr(config.target, "protocol", "") != "hermes-lab"
     runlog.event("objective", text=args.prompt)
@@ -368,7 +389,7 @@ async def _one_shot(config: Config, args: argparse.Namespace) -> int:
         mcp_bridge = await attach_mcp_servers(
             registry, config, progress=lambda m: print(f"[{m}]", file=sys.stderr)
         )
-    system = compose_system(endpoint, args.system)
+    system = compose_system(endpoint, system_override)
 
     def emit(text: str) -> None:
         sys.stdout.write(text)

@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .. import _paths
+
 from .registry import ToolContext, ToolRegistry
 
 MAX_GET = 40000
@@ -61,7 +63,7 @@ _USE_HINT = (
 
 
 def library_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "library" / "ENI"
+    return _paths.library_dir() / "ENI"
 
 
 def is_present() -> bool:

@@ -36,7 +36,7 @@ def _plan(token=None):
     return {
         "schema": "wallbreaker.hermes-campaign-plan/v2",
         "versions": {
-            "wallbreaker": "0.7.12",
+            "wallbreaker": "0.7.13",
             "hermes_release": "v2026.8.13",
             "hermes_agent": "0.20.1",
             "hermes_commit": "f" * 40,
@@ -446,3 +446,15 @@ def test_invalid_limit_is_argparse_error_before_config(monkeypatch):
         )
     assert exc.value.code == 2
     assert calls == []
+
+
+def test_cli_exposes_the_attack_core_and_a_persona_file():
+    """A jailbreak run needs fewer tools and a persona read from a file, not the shell."""
+    from wallbreaker.cli import build_main_parser
+
+    parser = build_main_parser()
+    args = parser.parse_args(["prompt here", "--tools", "core", "--system-file", "persona.md"])
+    assert args.tools == "core"
+    assert args.system_file == "persona.md"
+    default = parser.parse_args(["prompt here"])
+    assert default.tools == "all" and default.system_file is None

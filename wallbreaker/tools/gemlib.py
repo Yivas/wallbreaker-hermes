@@ -6,6 +6,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from .. import _paths
+
 from .registry import ToolContext, ToolRegistry
 
 MAX_GET = 40000
@@ -66,7 +68,7 @@ _USE_HINT = (
 
 
 def library_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "library"
+    return _paths.library_dir()
 
 
 def _config(corpus: str) -> dict | None:

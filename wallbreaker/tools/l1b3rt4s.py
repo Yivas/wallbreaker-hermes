@@ -6,6 +6,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from .. import _paths
+
 from .registry import ToolContext, ToolRegistry
 
 REPO_URL = "https://github.com/elder-plinius/L1B3RT4S"
@@ -26,7 +28,7 @@ _USE_HINT = (
 
 
 def library_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "library" / "L1B3RT4S"
+    return _paths.library_dir() / "L1B3RT4S"
 
 
 def is_cloned() -> bool:

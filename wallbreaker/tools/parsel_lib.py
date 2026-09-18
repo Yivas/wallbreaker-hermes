@@ -4,11 +4,13 @@ import subprocess
 import os
 from pathlib import Path
 
+from .. import _paths
+
 REPO_URL = "https://github.com/elder-plinius/P4RS3LT0NGV3"
 
 
 def library_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "library" / "P4RS3LT0NGV3"
+    return _paths.library_dir() / "P4RS3LT0NGV3"
 
 
 def bridge_path() -> Path:
