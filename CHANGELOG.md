@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.7.7 - 2026-09-17
+
+### Fixed
+
+- Downloaded batteries and libraries now go to the per-user data directory when the installation is
+  read-only. A protected install keeps the package directory non-writable, so the first download
+  failed with `WinError 5` and `wallbreaker battery` could not list anything. A writable checkout
+  keeps using its own `library/`, and `WALLBREAKER_LIBRARY_DIR` overrides both.
+
+Compare: [v0.7.6...v0.7.7](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.6...v0.7.7).
+
 ## 0.7.6 - 2026-09-16
 
 ### Fixed
