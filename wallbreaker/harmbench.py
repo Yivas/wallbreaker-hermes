@@ -8,6 +8,7 @@ from pathlib import Path
 
 import httpx
 
+from . import _paths
 from ._fsutil import atomic_write_bytes
 
 DATASET_URL = (
@@ -19,7 +20,8 @@ DATASET_SHA256 = "8d81accedd38eaaf8b760618622bb888417d1fd0c86eba65c427a16f1cbb4a
 
 
 def dataset_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "library" / "harmbench_behaviors.csv"
+    """Cache location, shared with every other download so a read-only install still works."""
+    return _paths.library_dir() / "harmbench_behaviors.csv"
 
 
 def is_cached() -> bool:

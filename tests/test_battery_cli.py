@@ -139,14 +139,14 @@ def test_operator_battery_needs_no_network(tmp_path, capsys):
 
 def test_cache_directory_survives_a_read_only_installation(tmp_path, monkeypatch):
     """A protected installation must still download: the cache moves to the user profile."""
-    from wallbreaker.datasets import _common
+    from wallbreaker import _paths
 
-    monkeypatch.delenv(_common.LIBRARY_DIR_ENV, raising=False)
+    monkeypatch.delenv(_paths.LIBRARY_DIR_ENV, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "win"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "nix"))
-    monkeypatch.setattr(_common.os, "access", lambda path, mode: False)
+    monkeypatch.setattr(_paths, "writable", lambda path: False)
 
-    resolved = _common.library_dir()
+    resolved = _paths.library_dir()
     # Whichever per-user directory the platform uses, it must stay inside the profile and outside
     # the read-only package.
     assert resolved.is_relative_to(tmp_path)
@@ -154,23 +154,31 @@ def test_cache_directory_survives_a_read_only_installation(tmp_path, monkeypatch
 
 
 def test_profile_directory_prefers_the_windows_variable(tmp_path, monkeypatch):
-    from wallbreaker.datasets import _common
+    from wallbreaker import _paths
 
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert _common.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
+    assert _paths.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
 
 
 def test_profile_directory_falls_back_to_xdg(tmp_path, monkeypatch):
-    from wallbreaker.datasets import _common
+    from wallbreaker import _paths
 
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     monkeypatch.delenv("APPDATA", raising=False)
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    assert _common.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
+    assert _paths.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
 
 
 def test_explicit_cache_directory_wins(tmp_path, monkeypatch):
-    from wallbreaker.datasets import _common
+    from wallbreaker import _paths
 
-    monkeypatch.setenv(_common.LIBRARY_DIR_ENV, str(tmp_path / "custom"))
-    assert _common.library_dir() == tmp_path / "custom"
+    monkeypatch.setenv(_paths.LIBRARY_DIR_ENV, str(tmp_path / "custom"))
+    assert _paths.library_dir() == tmp_path / "custom"
+
+
+def test_harmbench_shares_the_cache_resolver(tmp_path, monkeypatch):
+    """The battery that failed on the protected runtime must use the same directory as the rest."""
+    from wallbreaker import _paths, harmbench
+
+    monkeypatch.setenv(_paths.LIBRARY_DIR_ENV, str(tmp_path))
+    assert harmbench.dataset_path() == tmp_path / "harmbench_behaviors.csv"

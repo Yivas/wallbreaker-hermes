@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.7.10 - 2026-09-18
+
+### Fixed
+
+- Bundled batteries now download on a read-only installation. `harmbench_behaviors.csv` still built
+  its own path inside the package, and the writability check used `os.access`, which on Windows
+  reads the read-only attribute rather than the ACL and reported a protected directory as writable.
+  One shared resolver now decides the cache directory for every dataset and verifies writability by
+  writing a probe. Confirmed by installing the wheel in a directory with write access denied.
+
+  Operator catalogues that keep their own paths (L1B3RT4S, ENI, PARS3LT0NGV3, system prompts) are
+  unchanged and can still fail to update on a read-only install; batteries are the supported path.
+
+Compare: [v0.7.9...v0.7.10](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.9...v0.7.10).
+
 ## 0.7.9 - 2026-09-17
 
 ### Changed
