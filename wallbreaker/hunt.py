@@ -22,6 +22,10 @@ from . import datasets
 SCHEMA = "wallbreaker.hunt-plan/v1"
 RESULT_SCHEMA = "wallbreaker.hunt-result/v1"
 
+# Output ceiling asked of every fire. The target tool's own default is 1024, which is not enough
+# for a model that reasons first: the reply comes back empty and the judge then sees nothing.
+TARGET_MAX_TOKENS = 4096
+
 
 def _positive_int(value: str) -> int:
     try:
@@ -95,8 +99,17 @@ class ItemResult:
     item_id: str | None
     category: str | None
     verdicts: list[dict] = field(default_factory=list)
-    rounds_used: int = 0
+    graded_fires: int = 0
     error: str | None = None
+
+    @property
+    def measured(self) -> bool:
+        """An item counts only when at least one graded reply carried content.
+
+        A reply that came back empty is not a refusal: the target said nothing, and a judge reading
+        that emptiness as REFUSED would report a wall that was never there.
+        """
+        return any(not verdict.get("response_empty") for verdict in self.verdicts)
 
     def to_dict(self, include_bodies: bool, bodies: dict | None = None) -> dict:
         payload = {
@@ -105,7 +118,8 @@ class ItemResult:
             "item_id": self.item_id,
             "category": self.category,
             "verdicts": self.verdicts,
-            "rounds_used": self.rounds_used,
+            "graded_fires": self.graded_fires,
+            "measured": self.measured,
             "error": self.error,
         }
         if include_bodies and bodies:
@@ -118,9 +132,20 @@ def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def _empty_fingerprint() -> str:
+    return _fingerprint("")
+
+
 def _count_labels(verdicts: list[dict]) -> dict[str, int]:
+    """Labels of graded replies that actually carried content.
+
+    Replies with no content are excluded: an empty answer cannot say anything about the target's
+    willingness, and counting it as REFUSED would invent a result.
+    """
     counts: dict[str, int] = {}
     for verdict in verdicts:
+        if verdict.get("response_empty"):
+            continue
         label = str(verdict.get("label") or "UNKNOWN")
         counts[label] = counts.get(label, 0) + 1
     return counts
@@ -128,13 +153,29 @@ def _count_labels(verdicts: list[dict]) -> dict[str, int]:
 
 def _summarise(results: list[ItemResult]) -> dict:
     by_category: dict[str, dict] = {}
+    measured = 0
+    empty_replies = 0
     for result in results:
         key = result.category or "(none)"
-        bucket = by_category.setdefault(key, {"items": 0, "labels": {}})
+        bucket = by_category.setdefault(
+            key, {"items": 0, "measured_items": 0, "graded_fires": 0, "empty_replies": 0, "labels": {}}
+        )
         bucket["items"] += 1
+        bucket["graded_fires"] += result.graded_fires
+        bucket["empty_replies"] += sum(1 for v in result.verdicts if v.get("response_empty"))
+        if result.measured:
+            measured += 1
+            bucket["measured_items"] += 1
         for label, count in _count_labels(result.verdicts).items():
             bucket["labels"][label] = bucket["labels"].get(label, 0) + count
-    return {"items": len(results), "by_category": by_category}
+    empty_replies = sum(1 for r in results for v in r.verdicts if v.get("response_empty"))
+    return {
+        "items": len(results),
+        "measured_items": measured,
+        "unmeasured_items": len(results) - measured,
+        "empty_replies": empty_replies,
+        "by_category": by_category,
+    }
 
 
 def plan_hunt(args, config) -> HuntPlan:
@@ -193,24 +234,37 @@ async def _run_items(plan: HuntPlan, config, behaviors: list[dict]) -> list[Item
         bodies: dict = {"objective": objective, "response": None}
 
         def record(payload, response, label, reason, *_rest, _captured=captured, _bodies=bodies):
+            text = "" if response is None else str(response)
             _captured.append(
                 {
                     "label": str(label),
                     "reason": str(reason)[:200],
-                    "response_fingerprint": _fingerprint(str(response)),
+                    "response_fingerprint": _fingerprint(text),
+                    # An empty reply is reported as such instead of being counted as a refusal.
+                    "response_empty": not text.strip(),
                 }
             )
-            _bodies["response"] = str(response)
+            _bodies["response"] = text
 
         registry.ctx.record = record
         registry.ctx.current_objective = objective
         registry.ctx.attacker_model = endpoint.model or ""
         provider = build_provider(endpoint, plan.timeout)
+        # The target tool defaults to 1024 output tokens, which a reasoning model can spend on its
+        # own thinking and leave the reply empty. Telling the attacker the ceiling avoids the
+        # dominant "it came back empty" failure in this sweep.
+        brief = "\n\n".join(
+            (
+                objective,
+                f"Fire at the target with max_tokens={TARGET_MAX_TOKENS} so a reasoning model still "
+                "has room to answer after thinking.",
+            )
+        )
         try:
             await run_autonomous(
                 provider,
                 registry,
-                [user(objective)],
+                [user(brief)],
                 system=system,
                 max_rounds=plan.rounds,
                 max_tokens=getattr(config, "attacker_max_tokens", 4096) or 4096,
@@ -223,7 +277,9 @@ async def _run_items(plan: HuntPlan, config, behaviors: list[dict]) -> list[Item
             if close is not None:
                 await close()
         result.verdicts = captured
-        result.rounds_used = len(captured)
+        result.graded_fires = len(captured)
+        if not captured:
+            result.error = "no graded fire: the attacker never fired at the target"
         results.append(result)
         bodies_by_index[index] = bodies
         print(
@@ -294,7 +350,15 @@ def run_hunt_cli(args) -> int:
         print(f"Error: could not write {output}: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(_summarise(results), indent=2))
+    summary = _summarise(results)
+    print(json.dumps(summary, indent=2))
+    if summary["empty_replies"]:
+        print(
+            f"Warning: {summary['empty_replies']} graded repl(ies) came back empty and are excluded "
+            "from the label counts. An empty reply is not a refusal: raise the target's max_tokens "
+            "or inspect why the provider returned no content.",
+            file=sys.stderr,
+        )
     if args.include_bodies:
         print(
             f"Warning: {output} now contains objectives and responses. Treat it as sensitive.",

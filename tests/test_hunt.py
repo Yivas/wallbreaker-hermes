@@ -104,12 +104,15 @@ def test_results_have_no_bodies_by_default(wired, tmp_path, monkeypatch, capsys)
     lines = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
     assert [line["index"] for line in lines] == [1, 2]
     assert lines[0]["verdicts"][0]["label"] == "COMPLIED"
+    assert lines[0]["verdicts"][0]["response_empty"] is False
+    assert lines[0]["graded_fires"] == 1 and lines[0]["measured"] is True
     assert "objective" not in lines[0] and "response" not in lines[0]
     summary = json.loads(capsys.readouterr().out)
     assert summary["items"] == 2 and set(summary["by_category"]) == {"alpha", "beta"}
 
 
-def test_include_bodies_is_explicit_and_warns(wired, tmp_path, monkeypatch, capsys):
+def test_empty_replies_are_not_counted_as_labels(wired, tmp_path, monkeypatch, capsys):
+    """A blank answer says nothing about the target; counting it as REFUSED would invent a wall."""
     monkeypatch.setattr(
         hunt,
         "_load_behaviors",
@@ -121,22 +124,57 @@ def test_include_bodies_is_explicit_and_warns(wired, tmp_path, monkeypatch, caps
             return None
 
     async def fake_run(provider, registry, messages, **kwargs):
-        registry.ctx.record("payload", "response body", "REFUSED", "reason", None)
+        registry.ctx.record("payload", "", "REFUSED", "The target response is empty", None)
+        registry.ctx.record("payload", "   ", "REFUSED", "empty again", None)
         return type("Result", (), {"status": "finished"})()
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeAttacker())
     monkeypatch.setattr("wallbreaker.agent.loop.run_autonomous", fake_run)
 
-    output = tmp_path / "bodies.jsonl"
-    base = _args(output=str(output), include_bodies=True)
+    output = tmp_path / "empty.jsonl"
     args = _args(
         output=str(output),
-        include_bodies=True,
         authorized=True,
-        confirm=hunt.plan_hunt(base, wired).token(),
+        confirm=hunt.plan_hunt(_args(output=str(output)), wired).token(),
+    )
+    assert hunt.run_hunt_cli(args) == 0
+
+    line = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    assert line["graded_fires"] == 2
+    assert line["measured"] is False
+    assert all(v["response_empty"] for v in line["verdicts"])
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["empty_replies"] == 2
+    assert summary["measured_items"] == 0 and summary["unmeasured_items"] == 1
+    assert summary["by_category"]["alpha"]["labels"] == {}
+
+
+def test_an_item_without_any_fire_is_reported_as_unmeasured(wired, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        hunt,
+        "_load_behaviors",
+        lambda plan: [{"id": "item-1", "category": "alpha", "behavior": "Synthetic one"}],
+    )
+
+    class FakeAttacker:
+        async def aclose(self):
+            return None
+
+    async def fake_run(provider, registry, messages, **kwargs):
+        return type("Result", (), {"status": "finished"})()
+
+    monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeAttacker())
+    monkeypatch.setattr("wallbreaker.agent.loop.run_autonomous", fake_run)
+
+    output = tmp_path / "nofire.jsonl"
+    args = _args(
+        output=str(output),
+        authorized=True,
+        confirm=hunt.plan_hunt(_args(output=str(output)), wired).token(),
     )
     assert hunt.run_hunt_cli(args) == 0
     line = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
-    assert line["objective"] == "Synthetic one"
-    assert line["response"] == "response body"
-    assert "sensitive" in capsys.readouterr().err
+    assert line["graded_fires"] == 0
+    assert line["error"] == "no graded fire: the attacker never fired at the target"
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["unmeasured_items"] == 1

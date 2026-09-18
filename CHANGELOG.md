@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.7.11 - 2026-09-18
+
+### Fixed
+
+- `wallbreaker hunt` no longer counts an empty reply as a verdict. A target that answers nothing says
+  nothing about its willingness, so those fires are reported as `response_empty`, excluded from the
+  label counts and surfaced as `empty_replies`. Items that end without a graded fire are marked
+  `measured: false` with a reason instead of an empty `error`. The per-item field `rounds_used` was
+  renamed `graded_fires`, because that is what it always was.
+- The sweep now asks for `max_tokens=4096` on every fire. The target tool defaults to 1024, which a
+  reasoning model can spend on its own thinking and leave the reply empty: the dominant
+  "it came back empty" failure, and the one that produced six phantom REFUSED verdicts in the first
+  real sweep.
+
+Compare: [v0.7.10...v0.7.11](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.10...v0.7.11).
+
 ## 0.7.10 - 2026-09-18
 
 ### Fixed
