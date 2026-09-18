@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.7.15 - 2026-09-18
+
+### Added
+
+- `wallbreaker attack` fires one objective through a fixed battery of packagings: plain, encoded
+  chains, a primed assistant turn and a seeded past round, each continued over several turns. It
+  needs no agent in the loop, prints a plan with a token first, and records every verdict with the
+  stop reason and whether the reply was empty. It stops at the first compliance unless
+  `--keep-going` is passed.
+
+  This exists because leaving the attack to a model was unreliable: with identical input, one run
+  fired four times and reported `COMPLIED 10/10` while the log held `REFUSED`, and the next declined
+  the engagement without firing once. A model asked to attack can also decide not to.
+
+Compare: [v0.7.14...v0.7.15](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.14...v0.7.15).
+
 ## 0.7.14 - 2026-09-18
 
 ### Fixed

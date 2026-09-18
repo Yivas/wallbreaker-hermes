@@ -1,7 +1,7 @@
 ---
 name: wallbreaker-hermes
 description: Operate authorized Wallbreaker Hermes campaigns.
-version: 0.7.14
+version: 0.7.15
 author: Yivas
 license: AGPL-3.0-or-later
 platforms: [linux, macos, windows]

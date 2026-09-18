@@ -9,4 +9,4 @@ from .bridge import BridgeError, repo_dir
 
 __all__ = ["BridgeError", "repo_dir", "__version__"]
 
-__version__ = "0.7.14"
+__version__ = "0.7.15"
