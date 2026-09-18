@@ -150,9 +150,9 @@ HELP_TEXT = """☠ RTFM // TEH SL45H K0MM4NDZ, D00D ☠
 /adapt <seed> ;; <request> tailor an ENI/L1B3RT4S persona to the target, fire it, open a thread
 /firefile <file> ;; <req>  fire a file/seed RAW (verbatim, full-length) as the system prompt
 /harmbench [category]      standardized HarmBench behavior prompts (unbiased battery)
-/battery <src> [cat] [n]   same sampling from harmbench, jbb, strongreject or advbench
-/campaign [category] [n]   auto-escalate a battery up the technique ladder, coverage matrix
-/leaderboard [profiles..]  rank profiles by ASR on one battery (robustness benchmark)
+/battery <src> [category] [n]   sample harmbench, jbb, strongreject or advbench
+/campaign [source] [category] [n]   auto-escalate a battery up the ladder
+/leaderboard [source] [profiles..] [n]  rank profiles by ASR on one battery
 /swarm [@a,b] <objective>  vote/best-of: many attacker brains author + fire once, best break wins
 /swarm siege [@a,b] <obj>  COLLABORATIVE multi-round: models share one escalating thread + adapt off refusals until it cracks
 /swarm roster              show each attacker's per-model jailbreak status (armed/generic)
