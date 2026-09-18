@@ -4,7 +4,7 @@ import time
 
 from ..agent.messages import user
 from ..judging import grade
-from ._util import complete_with_reasoning
+from ._util import complete_with_reasoning, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 SELF_CIPHER_SYSTEM = (
@@ -146,7 +146,7 @@ async def _cipherchat(args: dict, ctx: ToolContext) -> str:
         return f"Error: unknown cipher '{cipher}'. Try caesar, ascii, or self."
 
     shift = int(args.get("shift", 3))
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     system = args.get("system") or SELF_CIPHER_SYSTEM
 
     if cipher == "caesar":

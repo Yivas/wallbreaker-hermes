@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.7.14 - 2026-09-18
+
+### Fixed
+
+- Firing tools now ask for 4096 output tokens by default instead of 1024. The default was cutting
+  replies that had started to comply: the target agreed, wrote the first import line and stopped,
+  and the truncated fragment then graded as a refusal.
+- `judge_response` records its verdict in the same sink as every other graded fire. Before, an
+  attacker could grade a body it had assembled itself, report `COMPLIED 10/10`, finish, and leave a
+  session whose log held a single `REFUSED`. Two labels for one run is a reporting bug, and the log
+  is the one that counts.
+
+Compare: [v0.7.13...v0.7.14](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.13...v0.7.14).
+
 ## 0.7.13 - 2026-09-18
 
 ### Added

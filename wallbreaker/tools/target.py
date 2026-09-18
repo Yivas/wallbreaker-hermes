@@ -6,7 +6,7 @@ from ..agent.messages import Message, TextBlock, assistant, user
 from ..cache import ResultCache
 from ..classify import classify
 from ..transforms import TRANSFORMS, apply_chain, decode_chain
-from ._util import complete_with_reasoning as _complete
+from ._util import complete_with_reasoning as _complete, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 
@@ -219,7 +219,7 @@ async def _query_target(args: dict, ctx: ToolContext) -> str:
             enc_note += f" | system encoded: {'+'.join(sys_transforms)}"
         else:
             enc_note += " | system_transforms ignored (no 'system' given)"
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
 
     messages: list[Message] = []
     history = args.get("history")
@@ -366,7 +366,7 @@ async def _continue_target(args: dict, ctx: ToolContext) -> str:
     from ..providers.factory import build_provider
 
     provider = build_provider(ctx.config.target, timeout=float(args.get("timeout", 90)))
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     ctx.target_thread.append(user(follow))
 
     start = time.monotonic()

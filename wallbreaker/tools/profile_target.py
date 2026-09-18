@@ -7,7 +7,7 @@ from ..agent.messages import assistant, user
 from ..judging import grade
 from ..persona_method import infer_domain, register_for
 from ..state import load_state, save_state, state_path_for
-from ._util import complete_untruncated, gather_capped
+from ._util import complete_untruncated, gather_capped, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 GENERIC_OBJECTIVE = (
@@ -254,7 +254,7 @@ async def _profile_target(args: dict, ctx: ToolContext) -> str:
 
     objective = (args.get("objective") or "").strip() or GENERIC_OBJECTIVE
     system = args.get("system")
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     timeout = float(args.get("timeout", 45))
     concurrency = max(1, int(args.get("concurrency", 3)))
     samples = max(1, min(int(args.get("samples", 1)), 5))

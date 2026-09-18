@@ -10,7 +10,7 @@ from ..agent.messages import user
 from ..judging import grade
 from ..vault import BreakVault, label_rank
 from ._conversation import DECENT_SCORE, Conversation, grade_and_record
-from ._util import complete_with_reasoning, gather_capped
+from ._util import complete_with_reasoning, gather_capped, DEFAULT_TARGET_MAX_TOKENS
 from .crescendo import _last_answer, _transcript
 from .registry import ToolContext, ToolRegistry
 
@@ -155,7 +155,7 @@ async def _swarm(args: dict, ctx: ToolContext) -> str:
     if action == "siege" or str(args.get("mode", "")).strip().lower() == "siege":
         return await _siege(ctx, objective, endpoints, args)
 
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     timeout = float(args.get("timeout", 90))
     limit = int(args.get("concurrency", 6))
 
@@ -284,7 +284,7 @@ async def _siege(ctx: ToolContext, objective: str, endpoints: list, args: dict) 
     """Collaborative multi-round siege: attacker models share one escalating target thread
     plus a pool of partial wins, adapting off each refusal + leaked CoT until it cracks."""
     max_rounds = max(1, min(int(args.get("rounds", 20)), 60))
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     limit = int(args.get("concurrency", 6))
     max_calls = int(args.get("max_calls", max_rounds * (len(endpoints) * 2 + 2)))
     # persist until broken: stop early only after this many rounds with no score improvement

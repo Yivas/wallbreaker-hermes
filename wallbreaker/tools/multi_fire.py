@@ -6,7 +6,7 @@ import time
 from ..agent.messages import user
 from ..judging import grade
 from ..transforms import TRANSFORMS, apply_chain
-from ._util import complete_untruncated, gather_capped
+from ._util import complete_untruncated, gather_capped, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 DEFAULT_CHAINS = [
@@ -40,7 +40,7 @@ async def _multi_fire(args: dict, ctx: ToolContext) -> str:
 
     chains = _parse_chains(args.get("chains"))
     system = args.get("system")
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
 
     bad = {c for chain in chains for c in chain if c and c not in TRANSFORMS}
     if bad:

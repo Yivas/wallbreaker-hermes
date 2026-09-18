@@ -22,6 +22,9 @@ async def _judge(args: dict, ctx: ToolContext) -> str:
     label, score, reason, source = await grade(
         endpoint, response, payload, objective, use_judge=True, reasoning=reasoning
     )
+    # A manual grade is a verdict like any other: it goes to the same sink the harness records, so a
+    # run cannot end with the attacker claiming one label while the log holds another.
+    ctx.record_verdict(payload, response, label, reason, "judge_response")
     score_str = f"{score}/10" if score is not None else "n/a"
     return f"[{source}] verdict={label} score={score_str} - {reason}"
 

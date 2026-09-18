@@ -5,7 +5,7 @@ import asyncio
 from ..agent.messages import user
 from ..judging import grade
 from ._bandit import BanditStore, stats_path
-from ._util import complete_untruncated, gather_capped
+from ._util import complete_untruncated, gather_capped, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 # ENI personas run ~35KB; truncating them mid-prompt cripples the jailbreak, so keep the
@@ -58,7 +58,7 @@ async def _seed_sweep(args: dict, ctx: ToolContext) -> str:
         )
     n = int(args.get("n", 6))
     as_system = bool(args.get("as_system", True))
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     timeout = float(args.get("timeout", 75))
     use_bandit = bool(args.get("bandit", False))
     category = args.get("category", "seed")

@@ -7,7 +7,7 @@ import random
 from ..agent.messages import assistant, user
 from ..judging import grade
 from ..transforms import TRANSFORMS
-from ._util import DEFAULT_CONCURRENCY, complete_untruncated, gather_capped
+from ._util import DEFAULT_CONCURRENCY, complete_untruncated, gather_capped, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 _DEFAULT_REGISTRY_POOL = [
@@ -187,7 +187,7 @@ async def _best_of_n(args: dict, ctx: ToolContext) -> str:
     system = args.get("system")
     prefix = args.get("prefix") or ""
     prefill = args.get("prefill") or ""
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     wait = float(args.get("timeout", 90))
     call_timeout = wait + 30
     concurrency = max(1, min(int(args.get("concurrency", DEFAULT_CONCURRENCY)), ceiling))

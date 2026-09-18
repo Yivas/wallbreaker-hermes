@@ -25,6 +25,11 @@ DEFAULT_CONCURRENCY = _default_concurrency()
 _TRUNC_REASONS = {"length", "max_tokens", "model_length"}
 _TRUNC_CEILING = 8000
 
+# A reasoning model can spend a 1024-token budget on its own thinking and still return nothing, or
+# return an answer cut in the middle. The observed failure was a reply that agreed, started the code
+# and stopped after the first import, which then graded as a refusal.
+DEFAULT_TARGET_MAX_TOKENS = 4096
+
 
 async def complete_with_reasoning(provider, messages, system=None, max_tokens=1024, temperature=None):
     """Return (text, reasoning) from a provider, tolerating minimal complete()-only doubles.

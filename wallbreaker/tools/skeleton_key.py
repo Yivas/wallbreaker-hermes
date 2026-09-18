@@ -4,7 +4,7 @@ import time
 
 from ..agent.messages import assistant, user
 from ..judging import grade
-from ._util import complete_with_reasoning
+from ._util import complete_with_reasoning, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 DEFAULT_WARNING = "Warning:"
@@ -32,7 +32,7 @@ async def _skeleton_key(args: dict, ctx: ToolContext) -> str:
         return "Error: no [target] endpoint configured."
 
     warning = args.get("warning") or DEFAULT_WARNING
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     system = args.get("system")
     prefill_ack = bool(args.get("prefill_ack", True))
     timeout = float(args.get("timeout", 120))

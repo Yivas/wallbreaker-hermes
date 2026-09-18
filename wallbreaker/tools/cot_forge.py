@@ -4,7 +4,7 @@ import asyncio
 
 from ..agent.messages import Message, TextBlock, assistant, user
 from ..judging import grade
-from ._util import complete_with_reasoning
+from ._util import complete_with_reasoning, DEFAULT_TARGET_MAX_TOKENS
 from .registry import ToolContext, ToolRegistry
 
 _CALL_TIMEOUT = 120.0
@@ -99,7 +99,7 @@ async def _cot_forge(args: dict, ctx: ToolContext) -> str:
         )
 
     system = args.get("system")
-    max_tokens = int(args.get("max_tokens", 1024))
+    max_tokens = int(args.get("max_tokens", DEFAULT_TARGET_MAX_TOKENS))
     max_calls = int(args.get("max_calls", 0)) or 8
     timeout = float(args.get("timeout", 90))
 
