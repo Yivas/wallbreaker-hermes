@@ -142,12 +142,31 @@ def test_cache_directory_survives_a_read_only_installation(tmp_path, monkeypatch
     from wallbreaker.datasets import _common
 
     monkeypatch.delenv(_common.LIBRARY_DIR_ENV, raising=False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "win"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "nix"))
     monkeypatch.setattr(_common.os, "access", lambda path, mode: False)
 
     resolved = _common.library_dir()
-    assert resolved == tmp_path / "wallbreaker-hermes" / "library"
+    # Whichever per-user directory the platform uses, it must stay inside the profile and outside
+    # the read-only package.
     assert resolved.is_relative_to(tmp_path)
+    assert resolved.parent.name == "wallbreaker-hermes"
+
+
+def test_profile_directory_prefers_the_windows_variable(tmp_path, monkeypatch):
+    from wallbreaker.datasets import _common
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert _common.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
+
+
+def test_profile_directory_falls_back_to_xdg(tmp_path, monkeypatch):
+    from wallbreaker.datasets import _common
+
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert _common.user_data_dir() == str(tmp_path / "wallbreaker-hermes")
 
 
 def test_explicit_cache_directory_wins(tmp_path, monkeypatch):

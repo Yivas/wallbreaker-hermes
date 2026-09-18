@@ -34,8 +34,13 @@ def library_dir() -> Path:
 
 
 def user_data_dir() -> str:
-    if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    """Per-user data directory, chosen by environment rather than by platform name.
+
+    Reading the environment keeps this testable on any system: a Windows profile advertises
+    LOCALAPPDATA, and everything else falls back to the XDG directory or the home directory.
+    """
+    for var in ("LOCALAPPDATA", "APPDATA"):
+        base = os.environ.get(var)
         if base:
             return str(Path(base) / "wallbreaker-hermes")
     xdg = os.environ.get("XDG_DATA_HOME")

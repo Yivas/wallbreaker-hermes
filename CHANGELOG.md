@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.8 - 2026-09-17
+
+### Fixed
+
+- The cache-directory test no longer depends on the host platform, and the per-user directory is
+  chosen from the environment instead of the platform name. The 0.7.7 release workflow failed on
+  Linux for that test alone; the shipped code was correct and the check was wrong.
+
+Compare: [v0.7.7...v0.7.8](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.7...v0.7.8).
+
 ## 0.7.7 - 2026-09-17
 
 ### Fixed
