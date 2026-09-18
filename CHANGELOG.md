@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.7.12 - 2026-09-18
+
+### Changed
+
+- `wallbreaker hunt` now fires each behavior itself instead of asking an agent to do it. Leaving the
+  shot to an agent made the sweep unpredictable: it picked a tool with no chain-of-thought recovery
+  and no stop-reason reporting, four of five items produced no verdict at all, and six empty replies
+  were graded as refusals. The sweep now fixes the shot, the output ceiling (`--max-tokens`,
+  default 4096) and the recording, and every item records `response_empty`, `response_chars`,
+  `response_fingerprint`, `stop_reason` and `graded_by`. An empty reply is never counted as a
+  verdict, and an item whose fire fails keeps its error.
+
+### Corrected
+
+- The 0.7.11 note claimed the empty replies were caused by the 1024-token ceiling. That was wrong:
+  a truncated fire would have been labelled ERROR and left no row, so those six rows prove the
+  replies were not truncated. What they show is an empty reply with an unknown stop reason, which
+  is exactly what the sweep now records.
+
+Compare: [v0.7.11...v0.7.12](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.11...v0.7.12).
+
 ## 0.7.11 - 2026-09-18
 
 ### Fixed
