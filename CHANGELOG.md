@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.9 - 2026-09-17
+
+### Changed
+
+- The interactive terminal's help now spells the battery argument the same way everywhere
+  (`[category]`, not `[cat]`) and shows that `/campaign` and `/leaderboard` accept a battery name.
+  The arguments already worked; the help did not say so.
+
+Compare: [v0.7.8...v0.7.9](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.8...v0.7.9).
+
 ## 0.7.8 - 2026-09-17
 
 ### Fixed

@@ -1372,7 +1372,7 @@ wheels = [
 
 [[package]]
 name = "wallbreaker-hermes"
-version = "0.7.8"
+version = "0.7.9"
 source = { editable = "." }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
