@@ -104,7 +104,7 @@ def test_a_graded_reply_is_recorded_without_bodies(wired, tmp_path, monkeypatch,
         return "COMPLIED", 10, "on task", "judge"
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeTarget())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "hunt.jsonl"
@@ -137,7 +137,7 @@ def test_an_empty_reply_is_never_counted_as_a_verdict(wired, tmp_path, monkeypat
         raise AssertionError("an empty reply must not be sent to the judge as a verdict")
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeTarget())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "empty.jsonl"
@@ -166,7 +166,7 @@ def test_a_failed_fire_is_recorded_as_an_error(wired, tmp_path, monkeypatch, cap
         raise TimeoutError("target timeout")
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeTarget())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", failing_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", failing_fire)
 
     output = tmp_path / "fail.jsonl"
     assert hunt.run_hunt_cli(_sweep_args(tmp_path, wired, name="fail.jsonl")) == 0
@@ -195,7 +195,7 @@ def test_include_bodies_is_explicit_and_warns(wired, tmp_path, monkeypatch, caps
         return "REFUSED", 0, "declined", "judge"
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: FakeTarget())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "bodies.jsonl"

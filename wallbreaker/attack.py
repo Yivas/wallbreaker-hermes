@@ -128,6 +128,7 @@ class Fire:
     graded_by: str | None = None
     stop_reason: str | None = None
     response_empty: bool = False
+    truncated: bool = False
     response_chars: int = 0
     response_fingerprint: str | None = None
     error: str | None = None
@@ -146,6 +147,7 @@ class Fire:
             "reason": self.reason[:200],
             "stop_reason": self.stop_reason,
             "response_empty": self.response_empty,
+            "truncated": self.truncated,
             "response_chars": self.response_chars,
             "response_fingerprint": self.response_fingerprint,
             "measured": self.measured,
@@ -219,7 +221,7 @@ async def _run(plan: AttackPlan, config, objective: str, persona: str | None) ->
     from .agent.messages import assistant, user
     from .judging import grade
     from .providers.factory import build_provider
-    from .tools.target import _fire
+    from .tools._util import complete_untruncated
 
     target_endpoint = getattr(config, "target", None)
     if target_endpoint is None:
@@ -234,10 +236,14 @@ async def _run(plan: AttackPlan, config, objective: str, persona: str | None) ->
             for turn in range(1, plan.turns + 1):
                 fire = Fire(packaging=packaging, turn=turn)
                 try:
-                    reply, reasoning, stop, empty = await _fire(
+                    # Untruncated on purpose: a reply cut at the ceiling would be graded as a
+                    # fragment, and a fragment says nothing reliable about compliance.
+                    reply, reasoning, stop, truncated = await complete_untruncated(
                         provider, messages, persona, plan.max_tokens
                     )
+                    empty = not (reply or "").strip()
                     fire.stop_reason = stop
+                    fire.truncated = truncated
                     fire.response_empty = empty
                     fire.response_chars = len(reply or "")
                     fire.response_fingerprint = _fingerprint(reply or "")
@@ -252,12 +258,18 @@ async def _run(plan: AttackPlan, config, objective: str, persona: str | None) ->
                         fire.label = label
                         fire.reason = reason
                         fire.graded_by = source
-                    messages.append(assistant(reply or ""))
-                    if turn < plan.turns:
-                        messages.append(user(CONTINUE_LEAD))
+                    if not fire.response_empty:
+                        messages.append(assistant(reply))
+                        if turn < plan.turns:
+                            messages.append(user(CONTINUE_LEAD))
                 except Exception as exc:  # noqa: BLE001 - one bad packaging must not stop the rest
                     fire.error = f"{type(exc).__name__}: {exc}"[:200]
                 fires.append(fire)
+                if fire.response_empty:
+                    # An empty assistant turn is rejected by the provider, so the thread ends here
+                    # rather than continuing with a message the next call would refuse.
+                    print(f"[{packaging}] empty reply: thread ends at turn {turn}", file=sys.stderr)
+                    break
                 shown = fire.error or ("empty" if fire.response_empty else (fire.label or "?"))
                 print(f"[{packaging} turn {turn}] {shown}", file=sys.stderr)
                 if fire.label == "COMPLIED" and not plan.keep_going:

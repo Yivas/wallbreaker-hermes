@@ -101,7 +101,7 @@ def test_stops_at_the_first_compliant_packaging(wired, tmp_path, monkeypatch, ca
         return "COMPLIED", 10, "on task", "judge"
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: _FakeProvider())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "attack.jsonl"
@@ -122,7 +122,7 @@ def test_keep_going_fires_the_whole_battery(wired, tmp_path, monkeypatch, capsys
         return "COMPLIED", 10, "on task", "judge"
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: _FakeProvider())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "attack.jsonl"
@@ -142,12 +142,14 @@ def test_an_empty_reply_is_not_a_verdict(wired, tmp_path, monkeypatch, capsys):
         raise AssertionError("an empty reply must not be graded as a verdict")
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: _FakeProvider())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", fake_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", fake_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "attack.jsonl"
-    assert attack.run_attack_cli(_sweep_args(tmp_path, wired, no_transforms=True)) == 0
-    line = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    assert attack.run_attack_cli(_sweep_args(tmp_path, wired, no_transforms=True, turns=2)) == 0
+    lines = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+    assert len(lines) == 1, "an empty reply ends the thread instead of being fed back"
+    line = lines[0]
     assert line["response_empty"] is True and line["measured"] is False
     assert line["label"] is None and line["stop_reason"] == "length"
     summary = json.loads(capsys.readouterr().out)
@@ -167,7 +169,7 @@ def test_a_failing_fire_is_recorded_and_does_not_stop_the_battery(wired, tmp_pat
         return "REFUSED", 0, "declined", "judge"
 
     monkeypatch.setattr("wallbreaker.providers.factory.build_provider", lambda endpoint, timeout=None: _FakeProvider())
-    monkeypatch.setattr("wallbreaker.tools.target._fire", flaky_fire)
+    monkeypatch.setattr("wallbreaker.tools._util.complete_untruncated", flaky_fire)
     monkeypatch.setattr("wallbreaker.judging.grade", fake_grade)
 
     output = tmp_path / "attack.jsonl"

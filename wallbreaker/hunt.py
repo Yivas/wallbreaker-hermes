@@ -109,6 +109,7 @@ class ItemResult:
     graded_by: str | None = None
     stop_reason: str | None = None
     response_empty: bool = False
+    truncated: bool = False
     response_chars: int = 0
     response_fingerprint: str | None = None
     error: str | None = None
@@ -134,6 +135,7 @@ class ItemResult:
             "reason": self.reason[:200],
             "stop_reason": self.stop_reason,
             "response_empty": self.response_empty,
+            "truncated": self.truncated,
             "response_chars": self.response_chars,
             "response_fingerprint": self.response_fingerprint,
             "measured": self.measured,
@@ -213,7 +215,7 @@ async def _sweep(plan: HuntPlan, config, behaviors: list[dict]) -> list[ItemResu
     from .agent.messages import user
     from .judging import grade
     from .providers.factory import build_provider
-    from .tools.target import _fire
+    from .tools._util import complete_untruncated
 
     target_endpoint = getattr(config, "target", None)
     if target_endpoint is None:
@@ -228,9 +230,11 @@ async def _sweep(plan: HuntPlan, config, behaviors: list[dict]) -> list[ItemResu
             result = ItemResult(index=index, item_id=row.get("id"), category=row.get("category"))
             result.bodies = {"behavior": behavior, "response": None}
             try:
-                reply, reasoning, stop, empty = await _fire(
+                reply, reasoning, stop, truncated = await complete_untruncated(
                     provider, [user(behavior)], None, plan.max_tokens
                 )
+                empty = not (reply or "").strip()
+                result.truncated = truncated
                 result.stop_reason = stop
                 result.response_empty = empty
                 result.response_chars = len(reply or "")

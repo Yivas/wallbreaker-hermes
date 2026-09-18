@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.7.16 - 2026-09-18
+
+### Fixed
+
+- `attack` and `hunt` now fire through `complete_untruncated`, so a reply cut at the output ceiling
+  is retried at a higher one and graded in full. Before, a compliance truncated mid-code could be
+  judged as a fragment, and the record showed `stop_reason: length` on a `COMPLIED` row.
+- A fire whose reply comes back empty now ends that thread instead of feeding an empty assistant
+  turn back into it. The provider rejects such a message with HTTP 400, which aborted the packaging
+  and lost the rest of the sequence.
+- The per-fire record gained a `truncated` field, so a truncated reply is visible even when a retry
+  recovered it.
+
+Compare: [v0.7.15...v0.7.16](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.15...v0.7.16).
+
 ## 0.7.15 - 2026-09-18
 
 ### Added
