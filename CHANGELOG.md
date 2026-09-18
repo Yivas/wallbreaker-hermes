@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.7.17 - 2026-09-18
+
+### Added
+
+- A failed attempt now records why it failed. The report kept only `error_type`, so three attempts
+  that died before firing said nothing about the cause and could not be diagnosed. The reason is
+  truncated to 256 characters and absolute paths are reduced to their last component, so a sanitized
+  report still does not carry the operator's directories.
+
+Compare: [v0.7.16...v0.7.17](https://github.com/Yivas/wallbreaker-hermes/compare/v0.7.16...v0.7.17).
+
 ## 0.7.16 - 2026-09-18
 
 ### Fixed

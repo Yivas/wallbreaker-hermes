@@ -1332,6 +1332,33 @@ async def _run_repetition(
     return result.status, automatic, fires
 
 
+def _strip_absolute_path(token: str) -> str:
+    """Reduce an absolute path to its last component, on either separator."""
+    normalised = token.replace("\\", "/")
+    parts = [part for part in normalised.split("/") if part and not part.endswith(":")]
+    return parts[-1] if parts else token
+
+
+def _safe_error_message(exc: BaseException) -> str:
+    """Short, path-free description of a failed attempt.
+
+    A failure reason belongs in the report: without it a failed attempt says nothing. The raw
+    message can also carry the operator's own directories, so anything that looks like an absolute
+    path is reduced to its last component and the result is truncated.
+    """
+    text = f"{type(exc).__name__}: {exc}".strip()
+    words = []
+    for token in text.split():
+        stripped = token.strip('",;()[]')
+        looks_absolute = (
+            (len(stripped) > 3 and stripped[1] == ":" and stripped[2] in "\/")
+            or stripped.startswith("/")
+        )
+        words.append(token.replace(stripped, _strip_absolute_path(stripped)) if looks_absolute else token)
+    return " ".join(words)[:256]
+
+
+
 def _cleanup_data(receipt: CleanupReceipt) -> dict:
     return {
         "outcome": receipt.outcome,
@@ -1771,7 +1798,7 @@ def validate_campaign_report(report: dict) -> dict:
                     "invocations",
                     "fires",
                 },
-                {"error_type", "discordant"},
+                {"error_type", "error", "discordant"},
             )
             if (
                 not _is_hash(attempt["id"])
@@ -1865,6 +1892,12 @@ def validate_campaign_report(report: dict) -> dict:
             if "error_type" in attempt and (
                 not isinstance(attempt["error_type"], str)
                 or status not in {AttemptStatus.FAILED, AttemptStatus.REPLACED}
+            ):
+                _report_invalid()
+            if "error" in attempt and (
+                not isinstance(attempt["error"], str)
+                or len(attempt["error"]) > 256
+                or status != AttemptStatus.FAILED
             ):
                 _report_invalid()
             if "discordant" in attempt and attempt["discordant"] is not True:
@@ -2695,6 +2728,7 @@ async def _run_campaign(
             attempt["status"] = AttemptStatus.FAILED.value
             attempt["assessment"] = Assessment.MANUAL_REQUIRED.value
             attempt["error_type"] = type(exc).__name__
+            attempt["error"] = _safe_error_message(exc)
         else:
             attempt["autonomous_status"] = auto_status
             attempt["automatic_assessment"] = assessment.value

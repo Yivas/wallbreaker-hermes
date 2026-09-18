@@ -1203,3 +1203,26 @@ def test_pending_review_is_structurally_valid_but_not_verified(tmp_path):
     validate_campaign_report(report)
     assert "review_pending" in campaign_verification_issues(report)
     assert "campaign_not_complete" in campaign_verification_issues(report)
+
+
+def test_a_failure_reason_is_recorded_without_local_paths():
+    """A failed attempt with no reason tells nobody anything, and must not leak local paths."""
+    message = campaign._safe_error_message(
+        campaign.CampaignError(r"preflight failed for C:\Users\someone\Temp\replica-abc")
+    )
+    assert "someone" not in message
+    assert "replica-abc" in message or "Temp" in message
+    assert message.startswith("CampaignError: ")
+
+
+def test_a_failure_reason_is_shortened_and_keeps_plain_sentences():
+    assert campaign._safe_error_message(TimeoutError("timeout after 90s")) == (
+        "TimeoutError: timeout after 90s"
+    )
+    assert len(campaign._safe_error_message(RuntimeError("x" * 500))) <= 256
+
+
+def test_the_attempt_schema_declares_the_optional_reason():
+    """The report validator must accept the field the producer now writes."""
+    attempt = {"error_type": "CampaignError"}
+    assert campaign._expect_keys(attempt, {"error_type"}, {"error", "discordant"}) is attempt
